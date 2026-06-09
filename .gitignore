@@ -1,0 +1,12 @@
+# Python
+resume-analyzer/venv/
+resume-analyzer/__pycache__/
+resume-analyzer/*.pyc
+resume-analyzer/.env
+
+# Node
+resume-analyzer/node_modules/
+prephire-frontend/node_modules/
+
+# Mac
+.DS_Store
