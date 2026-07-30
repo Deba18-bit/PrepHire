@@ -1,9 +1,13 @@
+export const startInterview = (data) => api.post('/interview/start', data);
+export const submitAnswer = (data) => api.post('/interview/answer', data);
+export const getInterviewFeedback = (interviewId) => api.get(`/interview/feedback/${interviewId}`);
 import axios from 'axios';
 
 const API_URL = 'https://prephire-7vlj.onrender.com';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 60000,
 });
 
 // Automatically add token to every request
