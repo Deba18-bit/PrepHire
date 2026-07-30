@@ -8,6 +8,9 @@ import os
 # Import your existing database setup & helper models
 from database import get_db
 from models import User
+from auth import create_access_token # Ensure this points to your JWT helper function
+
+router = APIRouter()
 
 class GoogleAuthRequest(BaseModel):
     credential: str
@@ -26,7 +29,7 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
         if not email:
             raise HTTPException(status_code=400, detail="Invalid token: missing email")
             
-        # 2. Check if user already exists in Neon DB
+        # 2. Check if user already exists in database
         user = db.query(User).filter(User.email == email).first()
         
         if not user:
@@ -41,21 +44,19 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
         elif not user.is_verified:
-            # If they previously signed up via email magic link, auto-verify them now
+            # Auto-verify them if they were unverified
             user.is_verified = True
             db.commit()
 
-        # 4. Generate YOUR app's existing JWT access token
+        # 4. Generate your app's JWT access token
         access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
         
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name
-            }
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "plan": getattr(user, "plan", "free")
         }
         
     except ValueError:
