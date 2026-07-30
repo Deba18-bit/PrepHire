@@ -5,7 +5,6 @@ import { GoogleOAuthProvider } from '@react-oauth/google'; // Import the provide
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import VerifyEmail from './pages/VerifyEmail.jsx'; 
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import InterviewSetup from './pages/InterviewSetup';
