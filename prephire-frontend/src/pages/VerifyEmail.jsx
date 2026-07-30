@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 
+// Automatically choose live Render URL or local development server
+const API_BASE_URL = window.location.hostname === "localhost" 
+  ? "http://localhost:8000" 
+  : "https://prephire-7vlj.onrender.com";
+
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
@@ -18,8 +23,8 @@ export default function VerifyEmail() {
 
     const verifyToken = async () => {
       try {
-        // Send the token to your FastAPI backend
-        const response = await axios.post(`http://localhost:8000/verify-email?token=${token}`);
+        // Send the token to your correct live or local FastAPI backend
+        const response = await axios.post(`${API_BASE_URL}/verify-email?token=${token}`);
         setStatus("success");
         setMessage(response.data.message || "Email successfully verified!");
       } catch (err) {
