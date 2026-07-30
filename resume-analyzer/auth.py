@@ -40,7 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(interview.router)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
