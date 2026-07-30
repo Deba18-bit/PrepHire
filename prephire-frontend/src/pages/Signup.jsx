@@ -13,15 +13,19 @@ export default function Signup() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    
     try {
       const res = await signup(form);
-      // Save token and user info, then jump straight to dashboard!
+      
+      // Save token and user details directly
       localStorage.setItem("token", res.data.access_token);
       localStorage.setItem("user", JSON.stringify({
         user_id: res.data.user_id,
         full_name: res.data.full_name,
         plan: res.data.plan,
       }));
+      
+      // Jump straight to dashboard!
       navigate("/dashboard");
     } catch (err) {
       if (err.response && err.response.data && err.response.data.detail) {
