@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { login } from "../services/api";
+import GoogleAuthButton from "../components/GoogleAuthButton"; // Added import
 
 export default function Login() {
   const navigate = useNavigate();
@@ -30,12 +31,13 @@ export default function Login() {
         }
         else if (typeof detail === 'string') {
           setError(detail);
-        }else {
+        } else {
           setError("An unexpected error occurred.");
         }
-      }else{
-      setError(err.response?.data?.detail || "Invalid email or password");
-    } }finally {
+      } else {
+        setError(err.response?.data?.detail || "Invalid email or password");
+      } 
+    } finally {
       setLoading(false);
     }
   };
@@ -96,9 +98,19 @@ export default function Login() {
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "#fff", marginBottom: 8, letterSpacing: "-0.5px" }}>
           Welcome back
         </h1>
-        <p style={{ color: "#555", fontSize: 14, marginBottom: 28 }}>
+        <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>
           Continue your interview preparation
         </p>
+
+        {/* --- ADDED GOOGLE AUTH COMPONENT --- */}
+        <GoogleAuthButton />
+
+        {/* --- ADDED DIVIDER --- */}
+        <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
+          <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+          <span style={{ color: "#555", fontSize: 12, padding: "0 12px", fontWeight: 500 }}>OR CONTINUE WITH EMAIL</span>
+          <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+        </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>

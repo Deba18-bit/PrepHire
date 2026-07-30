@@ -1,9 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google'; // Import the provider
+
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import VerifyEmail from './pages/VerifyEmail.jsx'; // 
+import VerifyEmail from './pages/VerifyEmail.jsx'; 
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import InterviewSetup from './pages/InterviewSetup';
@@ -13,23 +15,28 @@ import InterviewDashboard from "./pages/InterviewDashboard";
 import InterviewReport from "./pages/InterviewReport";
 
 function App() {
+  // Pull the Client ID from your environment variables
+  const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        {/* --- NEW ROUTE TO CATCH THE MAGIC LINK --- */}
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/analysis/:id" element={<Analysis />} />
-        <Route path="/interview-setup" element={<InterviewSetup />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/interview-room" element={<InterviewRoom />} />
-        <Route path="/interviews" element={<InterviewDashboard />} />
-        <Route path="/interview-report/:id" element={<InterviewReport />} />
-      </Routes>
-    </Router>
+    // Wrap the Router with the GoogleOAuthProvider
+    <GoogleOAuthProvider clientId={clientId}>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/analysis/:id" element={<Analysis />} />
+          <Route path="/interview-setup" element={<InterviewSetup />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/interview-room" element={<InterviewRoom />} />
+          <Route path="/interviews" element={<InterviewDashboard />} />
+          <Route path="/interview-report/:id" element={<InterviewReport />} />
+        </Routes>
+      </Router>
+    </GoogleOAuthProvider>
   );
 }
 

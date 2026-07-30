@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { signup } from "../services/api";
+import GoogleAuthButton from "../components/GoogleAuthButton"; // Added import
 
 export default function Signup() {
   const [form, setForm] = useState({ full_name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false); // Added success state
+  const [success, setSuccess] = useState(false); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,22 +15,19 @@ export default function Signup() {
     setError("");
     try {
       await signup(form);
-      // Auto-login removed. We simply trigger the success UI now.
       setSuccess(true);
     } catch (err) {
       if (err.response && err.response.data && err.response.data.detail) {
         const detail = err.response.data.detail;
         if (Array.isArray(detail)) {
-          // Extract the exact message, e.g., "value is not a valid email address"
           setError(detail[0].msg); 
         }
         else if (typeof detail === 'string') {
           setError(detail);
-        }else {
+        } else {
           setError("An unexpected error occurred.");
         }
-        } else {
-        // Fallback for network errors (server down, etc.)
+      } else {
         setError("Unable to connect to the server. Please try again.");
       }
     } finally {
@@ -97,7 +95,6 @@ export default function Signup() {
         </div>
 
         {success ? (
-          /* --- NEW SUCCESS SCREEN --- */
           <div className="success-box">
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#fff" }}>Check your inbox!</h2>
             <p style={{ fontSize: 14, color: "#a1a1aa", lineHeight: 1.6, marginBottom: 24 }}>
@@ -108,14 +105,23 @@ export default function Signup() {
             </Link>
           </div>
         ) : (
-          /* --- ORIGINAL SIGNUP FORM --- */
           <>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: "#fff", marginBottom: 8, letterSpacing: "-0.5px" }}>
               Create your free account
             </h1>
-            <p style={{ color: "#555", fontSize: 14, marginBottom: 28 }}>
+            <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>
               3 free resume scans. No credit card needed.
             </p>
+
+            {/* --- ADDED GOOGLE AUTH COMPONENT --- */}
+            <GoogleAuthButton />
+
+            {/* --- ADDED DIVIDER --- */}
+            <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
+              <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+              <span style={{ color: "#555", fontSize: 12, padding: "0 12px", fontWeight: 500 }}>OR CONTINUE WITH EMAIL</span>
+              <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+            </div>
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
