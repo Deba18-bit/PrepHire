@@ -8,7 +8,6 @@ import os
 # Import your existing database setup & helper models
 from database import get_db
 from models import User
-from auth import create_access_token # Adjust import path to match your JWT creator function
 
 class GoogleAuthRequest(BaseModel):
     credential: str
