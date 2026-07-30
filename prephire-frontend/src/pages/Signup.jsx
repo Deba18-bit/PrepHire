@@ -1,28 +1,34 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { signup } from "../services/api";
-import GoogleAuthButton from "../components/GoogleAuthButton"; // Added import
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
 export default function Signup() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ full_name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
-      await signup(form);
-      setSuccess(true);
+      const res = await signup(form);
+      // Save token and user info, then jump straight to dashboard!
+      localStorage.setItem("token", res.data.access_token);
+      localStorage.setItem("user", JSON.stringify({
+        user_id: res.data.user_id,
+        full_name: res.data.full_name,
+        plan: res.data.plan,
+      }));
+      navigate("/dashboard");
     } catch (err) {
       if (err.response && err.response.data && err.response.data.detail) {
         const detail = err.response.data.detail;
         if (Array.isArray(detail)) {
           setError(detail[0].msg); 
-        }
-        else if (typeof detail === 'string') {
+        } else if (typeof detail === 'string') {
           setError(detail);
         } else {
           setError("An unexpected error occurred.");
@@ -69,12 +75,6 @@ export default function Signup() {
         }
         .btn-primary:hover { opacity: 0.85; }
         .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-        .success-box {
-          background: rgba(79, 126, 255, 0.08);
-          border: 1px solid rgba(79, 126, 255, 0.2);
-          border-radius: 12px; padding: 24px;
-          text-align: center;
-        }
       `}</style>
 
       <div style={{
@@ -94,100 +94,84 @@ export default function Signup() {
           <span style={{ fontWeight: 700, fontSize: 17, color: "#fff" }}>PrepHire</span>
         </div>
 
-        {success ? (
-          <div className="success-box">
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#fff" }}>Check your inbox!</h2>
-            <p style={{ fontSize: 14, color: "#a1a1aa", lineHeight: 1.6, marginBottom: 24 }}>
-              We've sent a magic link to <strong style={{ color: "#fff" }}>{form.email}</strong>. Click the link to verify your account and get started.
-            </p>
-            <Link to="/login" style={{ color: "#4F7EFF", textDecoration: "none", fontWeight: 600, fontSize: 14 }}>
-              ← Return to Login
-            </Link>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#fff", marginBottom: 8, letterSpacing: "-0.5px" }}>
+          Create your free account
+        </h1>
+        <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>
+          3 free resume scans. No credit card needed.
+        </p>
+
+        <GoogleAuthButton />
+
+        <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
+          <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+          <span style={{ color: "#555", fontSize: 12, padding: "0 12px", fontWeight: 500 }}>OR CONTINUE WITH EMAIL</span>
+          <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Full Name</label>
+            <input
+              className="input-field"
+              type="text"
+              placeholder="Debarghya Samadder"
+              value={form.full_name}
+              onChange={e => setForm({ ...form, full_name: e.target.value })}
+              required
+            />
           </div>
-        ) : (
-          <>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: "#fff", marginBottom: 8, letterSpacing: "-0.5px" }}>
-              Create your free account
-            </h1>
-            <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>
-              3 free resume scans. No credit card needed.
-            </p>
 
-            {/* --- ADDED GOOGLE AUTH COMPONENT --- */}
-            <GoogleAuthButton />
+          <div>
+            <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Email</label>
+            <input
+              className="input-field"
+              type="email"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+              required
+            />
+          </div>
 
-            {/* --- ADDED DIVIDER --- */}
-            <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
-              <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
-              <span style={{ color: "#555", fontSize: 12, padding: "0 12px", fontWeight: 500 }}>OR CONTINUE WITH EMAIL</span>
-              <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }}></div>
+          <div>
+            <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Password</label>
+            <input
+              className="input-field"
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={e => setForm({ ...form, password: e.target.value })}
+              required
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              background: "rgba(255,59,59,0.08)",
+              border: "1px solid rgba(255,59,59,0.2)",
+              borderRadius: 8, padding: "10px 14px",
+              color: "#ff6b6b", fontSize: 13,
+            }}>
+              {error}
             </div>
+          )}
 
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Full Name</label>
-                <input
-                  className="input-field"
-                  type="text"
-                  placeholder="Debarghya Samadder"
-                  value={form.full_name}
-                  onChange={e => setForm({ ...form, full_name: e.target.value })}
-                  required
-                />
-              </div>
+          <button className="btn-primary" type="submit" disabled={loading}>
+            {loading ? "Creating account..." : "Create Account →"}
+          </button>
 
-              <div>
-                <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Email</label>
-                <input
-                  className="input-field"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={e => setForm({ ...form, email: e.target.value })}
-                  required
-                />
-              </div>
+          <p style={{ fontSize: 12, color: "#444", textAlign: "center", lineHeight: 1.6 }}>
+            By signing up you agree to our Terms of Service and Privacy Policy.
+          </p>
+        </form>
 
-              <div>
-                <label style={{ fontSize: 13, color: "#666", marginBottom: 6, display: "block" }}>Password</label>
-                <input
-                  className="input-field"
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
-                  required
-                />
-              </div>
-
-              {error && (
-                <div style={{
-                  background: "rgba(255,59,59,0.08)",
-                  border: "1px solid rgba(255,59,59,0.2)",
-                  borderRadius: 8, padding: "10px 14px",
-                  color: "#ff6b6b", fontSize: 13,
-                }}>
-                  {error}
-                </div>
-              )}
-
-              <button className="btn-primary" type="submit" disabled={loading}>
-                {loading ? "Creating account..." : "Create Account →"}
-              </button>
-
-              <p style={{ fontSize: 12, color: "#444", textAlign: "center", lineHeight: 1.6 }}>
-                By signing up you agree to our Terms of Service and Privacy Policy.
-              </p>
-            </form>
-
-            <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "#555" }}>
-              Already have an account?{" "}
-              <Link to="/login" style={{ color: "#4F7EFF", textDecoration: "none", fontWeight: 600 }}>
-                Sign in
-              </Link>
-            </p>
-          </>
-        )}
+        <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "#555" }}>
+          Already have an account?{" "}
+          <Link to="/login" style={{ color: "#4F7EFF", textDecoration: "none", fontWeight: 600 }}>
+            Sign in
+          </Link>
+        </p>
       </div>
     </div>
   );

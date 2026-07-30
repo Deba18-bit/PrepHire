@@ -5,18 +5,19 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db, engine
 from models import ResumeAnalysis, User, Base
-from schemas import UserSignup, UserLogin, TokenResponse
+from schemas import UserLogin, TokenResponse
 from pdf_extractor import extract_text_from_pdf
 from ai_analyzer import analyze_resume
 from auth import hash_password, verify_password, create_access_token, verify_token, get_current_user
 import jwt
 import os
-from utils import create_verification_token, send_verification_email
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import interview
-from fastapi import BackgroundTasks
+from pydantic import BaseModel, EmailStr
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 Base.metadata.create_all(bind=engine)
 
@@ -42,10 +43,18 @@ app.add_middleware(
 app.include_router(interview.router)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# ─── Sign Up ───
+class SignupRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+
+class GoogleAuthRequest(BaseModel):
+    credential: str
+
+# ─── Sign Up (Instant Verification - No Magic Links) ───
 @app.post("/signup")
-@limiter.limit("3/minute")
-def signup(request: Request, data: UserSignup, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def signup(request: Request, data: SignupRequest, db: Session = Depends(get_db)):
     try:
         valid = validate_email(data.email, check_deliverability=True)
         data.email = valid.normalized
@@ -53,57 +62,76 @@ def signup(request: Request, data: UserSignup, background_tasks: BackgroundTasks
         raise HTTPException(status_code=400, detail=str(e))
 
     existing = db.query(User).filter(User.email == data.email).first()
-    
     if existing:
-        if existing.is_verified:
-            raise HTTPException(status_code=400, detail="Email already registered. Please log in.")
-        else:
-            # Cleanly handle existing unverified users
-            existing.hashed_password = hash_password(data.password)
-            existing.full_name = data.full_name
-            db.commit()
-            
-            token = create_verification_token(existing.email)
-            background_tasks.add_task(send_verification_email, existing.email, token)
-            return {"message": "New verification link sent! Check your email.", "user_id": existing.id}
+        raise HTTPException(status_code=400, detail="Email already registered. Please log in.")
 
-    # Cleanly handle brand new users
+    # Create brand new user instantly verified
     user = User(
         full_name=data.full_name,
         email=data.email,
-        hashed_password=hash_password(data.password)
+        hashed_password=hash_password(data.password),
+        is_verified=True
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_verification_token(user.email)
-    background_tasks.add_task(send_verification_email, user.email, token)
+    # Automatically generate access token so they are logged in right away
+    access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
     
-    return {"message": "Account created. Check your email to verify.", "user_id": user.id}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "plan": getattr(user, "plan", "free")
+    }
 
-@app.post("/verify-email")
-def verify_email(token: str, db: Session = Depends(get_db)):
+# ─── Google OAuth Route ───
+@app.post("/auth/google")
+def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    
     try:
-        secret = os.getenv("JWT_SECRET_KEY")
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-        email = payload.get("sub")
+        id_info = id_token.verify_oauth2_token(data.credential, requests.Request(), client_id)
         
+        email = id_info.get("email")
+        name = id_info.get("name", "Google User")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Invalid token: missing email")
+            
         user = db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-            
-        if user.is_verified:
-            return {"message": "Email is already verified!"}
-            
-        user.is_verified = True
-        db.commit()
-        return {"message": "Email successfully verified. You can now log in."}
         
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=400, detail="This magic link has expired.")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=400, detail="Invalid magic link.")
+        if not user:
+            user = User(
+                full_name=name,
+                email=email,
+                hashed_password="OAUTH_USER_NO_PASSWORD",
+                is_verified=True
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.is_verified:
+            user.is_verified = True
+            db.commit()
+
+        access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "plan": getattr(user, "plan", "free")
+        }
+        
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google credential token"
+        )
 
 # ─── Login ───
 @app.post("/login", response_model=TokenResponse)
@@ -114,9 +142,6 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         
     if not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
-        
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Account does not exist. Please sign up.")
         
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account banned.")
