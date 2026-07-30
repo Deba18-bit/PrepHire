@@ -9,7 +9,6 @@ from models import ResumeAnalysis, User, Base
 from schemas import UserSignup, UserLogin, TokenResponse
 from pdf_extractor import extract_text_from_pdf
 from ai_analyzer import analyze_resume
-from auth import hash_password, verify_password, create_access_token, verify_token, get_current_user
 import jwt
 import os
 from utils import create_verification_token, send_verification_email
