@@ -1,15 +1,13 @@
 import os
-import smtplib
 import jwt
-from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import resend
 
 load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-SMTP_EMAIL = os.getenv("SMTP_EMAIL")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 def create_verification_token(email: str):
     # This creates a token that expires in 24 hours
@@ -19,27 +17,20 @@ def create_verification_token(email: str):
     return token
 
 def send_verification_email(receiver_email: str, token: str):
-    # This is the link the user will click. It goes to your React app.
     magic_link = f"https://prep-hire-pink.vercel.app/verify-email?token={token}"
     
-    # Print the link loudly to the Render console
-    print("\n" + "="*60)
-    print(f"🚨 NEW SIGNUP: {receiver_email} 🚨")
-    print(f"🔗 CLICK TO VERIFY: {magic_link}")
-    print("="*60 + "\n")
-
-    # --- COMMENTED OUT TO PREVENT RENDER FIREWALL CRASH ---
-    # msg = MIMEText(f"Welcome to PrepHire! Click here to verify your account: {magic_link}")
-    # msg['Subject'] = 'Verify your PrepHire Account'
-    # msg['From'] = SMTP_EMAIL
-    # msg['To'] = receiver_email
-    #
-    # try:
-    #     # Connect to Gmail and send!
-    #     server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-    #     server.login(SMTP_EMAIL, SMTP_PASSWORD)
-    #     server.send_message(msg)
-    #     server.quit()
-    #     print("✅ Email sent successfully!")
-    # except Exception as e:
-    #     print(f"❌ Error sending email: {e}")
+    # Resend requires a 'from' address. On the free tier, they provide a testing domain.
+    # Note: On the free tier, you can only send emails to the email address you signed up to Resend with!
+    try:
+        params = {
+            "from": "onboarding@resend.dev",
+            "to": receiver_email,
+            "subject": "Verify your PrepHire Account",
+            "html": f"<h3>Welcome to PrepHire!</h3><p>Click <a href='{magic_link}'>here</a> to verify your account.</p>"
+        }
+        
+        email_response = resend.Emails.send(params)
+        print(f"✅ Email successfully sent via Resend API: {email_response}")
+        
+    except Exception as e:
+        print(f"❌ Error sending email via Resend: {e}")
