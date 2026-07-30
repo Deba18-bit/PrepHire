@@ -1,5 +1,4 @@
 from fastapi import FastAPI, UploadFile, HTTPException, Depends, status, Request
-import requests
 from email_validator import validate_email, EmailNotValidError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -9,7 +8,6 @@ from models import ResumeAnalysis, User, Base
 from schemas import UserSignup, UserLogin, TokenResponse
 from pdf_extractor import extract_text_from_pdf
 from ai_analyzer import analyze_resume
-# 👇 Notice get_current_user is now imported from auth here 👇
 from auth import hash_password, verify_password, create_access_token, verify_token, get_current_user
 import jwt
 import os
@@ -27,51 +25,49 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+origins = [
+    "https://prep-hire-pink.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=origins, 
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"],
 )
 
 app.include_router(interview.router)
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
 
 # ─── Sign Up ───
 @app.post("/signup")
 @limiter.limit("3/minute")
 def signup(request: Request, data: UserSignup, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    # 1. Strict Email Validation
     try:
         valid = validate_email(data.email, check_deliverability=True)
         data.email = valid.normalized
     except EmailNotValidError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 2. Database Check
     existing = db.query(User).filter(User.email == data.email).first()
     
     if existing:
         if existing.is_verified:
-            # If they are fully verified, block them.
             raise HTTPException(status_code=400, detail="Email already registered. Please log in.")
         else:
-            # 🚨 THE MAGIC FIX 🚨
-            # If they exist but ARE NOT verified, they probably lost their link or it expired.
-            # We overwrite their old password with the new one they just typed, and send a new link!
+            # Cleanly handle existing unverified users
             existing.hashed_password = hash_password(data.password)
             existing.full_name = data.full_name
             db.commit()
-
-            background_tasks.add_task(send_verification_email, data.email, token)
+            
             token = create_verification_token(existing.email)
-            send_verification_email(existing.email, token)
+            background_tasks.add_task(send_verification_email, existing.email, token)
             return {"message": "New verification link sent! Check your email.", "user_id": existing.id}
 
-    # 3. Create Brand New User
+    # Cleanly handle brand new users
     user = User(
         full_name=data.full_name,
         email=data.email,
@@ -82,67 +78,49 @@ def signup(request: Request, data: UserSignup, background_tasks: BackgroundTasks
     db.refresh(user)
 
     token = create_verification_token(user.email)
-    send_verification_email(user.email, token)
+    background_tasks.add_task(send_verification_email, user.email, token)
     
     return {"message": "Account created. Check your email to verify.", "user_id": user.id}
 
 @app.post("/verify-email")
 def verify_email(token: str, db: Session = Depends(get_db)):
     try:
-        # 1. Decode the token using your secret key
         secret = os.getenv("JWT_SECRET_KEY")
-        
-        # If the token was tampered with, or expired, this line will throw an error
         payload = jwt.decode(token, secret, algorithms=["HS256"])
-        
-        # Grab the email we stored inside the token payload
         email = payload.get("sub")
         
-        # 2. Look up the user in the database
         user = db.query(User).filter(User.email == email).first()
-        
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
             
         if user.is_verified:
-            # Idempotency: If they click the link twice, just tell them they are already verified
             return {"message": "Email is already verified!"}
             
-        # 3. Upgrade their account status!
         user.is_verified = True
         db.commit()
-        
         return {"message": "Email successfully verified. You can now log in."}
         
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=400, detail="This magic link has expired. Please request a new one.")
+        raise HTTPException(status_code=400, detail="This magic link has expired.")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=400, detail="Invalid magic link.")
 
 # ─── Login ───
 @app.post("/login", response_model=TokenResponse)
 def login(data: UserLogin, db: Session = Depends(get_db)):
-    # 1. Check if the email exists first
     user = db.query(User).filter(User.email == data.email).first()
     if not user:
         raise HTTPException(status_code=404, detail="Account does not exist. Please sign up.")
         
-    # 2. Check if the password matches
     if not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password. Please try again.")
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
         
-    # 3. THE BOUNCER CHECK
     if not user.is_verified:
-        raise HTTPException(
-            status_code=403, 
-            detail="Account does not exist. Please sign up."
-        )
+        raise HTTPException(status_code=403, detail="Account does not exist. Please sign up.")
         
-    # 4. Check if the account is banned
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account banned.")
 
-    # 5. Generate Token and let them in!
     token = create_access_token({"user_id": user.id, "email": user.email})
     return TokenResponse(
         access_token=token,
@@ -174,12 +152,8 @@ async def upload_resume(
     if not current_user.is_active:
         raise HTTPException(403, "Account banned")
 
-    # Scan limit check
     if current_user.plan == "free" and current_user.scan_count >= 3:
-        raise HTTPException(
-            403,
-            "Free plan limit reached. Upgrade to continue."
-        )
+        raise HTTPException(403, "Free plan limit reached. Upgrade to continue.")
 
     if file.content_type != "application/pdf":
         raise HTTPException(400, "Only PDF files allowed")
@@ -188,7 +162,6 @@ async def upload_resume(
     extracted_text = extract_text_from_pdf(contents)
     analysis = analyze_resume(extracted_text, target_role)
 
-    # Save to database
     db_analysis = ResumeAnalysis(
         user_id=current_user.id,
         filename=file.filename,
@@ -199,7 +172,6 @@ async def upload_resume(
     )
     db.add(db_analysis)
 
-    # Increment scan count
     current_user.scan_count += 1
     db.commit()
     db.refresh(db_analysis)
@@ -210,22 +182,12 @@ async def upload_resume(
 
 # ─── Get user's past analyses ───
 @app.get("/my-analyses")
-def get_my_analyses(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    analyses = db.query(ResumeAnalysis).filter(
-        ResumeAnalysis.user_id == current_user.id
-    ).all()
+def get_my_analyses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    analyses = db.query(ResumeAnalysis).filter(ResumeAnalysis.user_id == current_user.id).all()
     return analyses
 
 @app.put("/admin/change-plan/{user_id}")
-def change_plan(
-    user_id: int,
-    plan: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def change_plan(user_id: int, plan: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.is_admin:
         raise HTTPException(403, "Admin only")
     
@@ -240,29 +202,18 @@ def change_plan(
     user.scan_count = 0
     db.commit()
     
-    return {
-        "message": f"User {user_id} switched to {plan} plan",
-        "user_id": user_id,
-        "new_plan": plan
-    }
+    return {"message": f"User {user_id} switched to {plan} plan", "user_id": user_id, "new_plan": plan}
 
 # ─── Admin — get all users ───
 @app.get("/admin/users")
-def get_all_users(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_all_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.is_admin:
         raise HTTPException(403, "Admin access required")
     return db.query(User).all()
 
 # ─── Admin — ban user ───
 @app.put("/admin/ban/{user_id}")
-def ban_user(
-    user_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def ban_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.is_admin:
         raise HTTPException(403, "Admin access required")
     user = db.query(User).filter(User.id == user_id).first()
@@ -274,10 +225,7 @@ def ban_user(
 
 # ─── Admin — all analyses ───
 @app.get("/admin/analyses")
-def get_all_analyses(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_all_analyses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.is_admin:
         raise HTTPException(403, "Admin access required")
     return db.query(ResumeAnalysis).all()
