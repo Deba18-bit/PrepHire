@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import "regenerator-runtime/runtime"; 
+import api from "../services/api"; // Import your central API helper
 
 export default function InterviewRoom() {
   const location = useLocation();
@@ -94,7 +95,6 @@ export default function InterviewRoom() {
   }, [chatLog]);
 
   // ── Speech Recognition Hook ──
-  // FIX 1: We must include browserSupportsSpeechRecognition here
   const {
     transcript,
     listening,
@@ -108,7 +108,6 @@ export default function InterviewRoom() {
     }
   }, [transcript, listening]);
 
-  //  after ALL hooks have been declared!
   if (!browserSupportsSpeechRecognition) {
     return (
       <div style={{ background: "#080808", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
@@ -150,21 +149,13 @@ export default function InterviewRoom() {
     setIsAIThinking(true);
     
     try {
-      const response = await fetch("http://localhost:8000/api/interview/reply", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          answer_text: userMessage
-        })
+      // Use your central api instance instead of raw fetch
+      const res = await api.post("/interview/reply", {
+        session_id: sessionId,
+        answer_text: userMessage
       });
 
-      if (!response.ok) throw new Error("Failed to get AI response");
-
-      const data = await response.json();
+      const data = res.data;
 
       // ─── AUTO-REDIRECT LOGIC: Check for completion tag ───
       if (data.ai_message.includes("[INTERVIEW_COMPLETE]")) {

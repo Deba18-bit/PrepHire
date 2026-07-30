@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import api from "../services/api"; // Import your central API helper
 
 export default function InterviewReport() {
   const { id } = useParams();
@@ -8,14 +9,10 @@ export default function InterviewReport() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:8000/api/interviews/report/${id}`, {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
-      }
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setReport(data);
+    // Use your central api instance instead of raw fetch
+    api.get(`/interviews/report/${id}`)
+      .then((res) => {
+        setReport(res.data);
         setLoading(false);
       })
       .catch((err) => {

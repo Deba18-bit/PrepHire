@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api"; // Import your central API helper
 
 export default function InterviewDashboard() {
   const navigate = useNavigate();
@@ -7,25 +8,14 @@ export default function InterviewDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch user's past interview sessions from your backend
-    fetch("http://localhost:8000/api/interviews/history", {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
-      }
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        const rawInterviews = data.interviews || [];
+    // Use your central api instance instead of raw fetch
+    api.get("/interviews/history")
+      .then((res) => {
+        const rawInterviews = res.data.interviews || [];
         
         // ─── STRICT SORT: Newest created/updated first ───
-        // If your database item has a unique timestamp or auto-incrementing id, 
-        // we sort descending so the newest ones pop to the top.
         const sortedInterviews = rawInterviews.sort((a, b) => {
-          // If you have a true timestamp field like created_at, use it:
-          // return new Date(b.created_at) - new Date(a.created_at);
-          
-          // Fallback or secondary sorting logic based on array index/id order
-          return 0; // Keeping your list secure
+          return 0; // Keeping your sorting logic secure
         });
 
         setInterviews(sortedInterviews);

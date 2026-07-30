@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api"; // Import your central API helper
 
 export default function InterviewSetup() {
   const navigate = useNavigate();
@@ -63,28 +64,14 @@ export default function InterviewSetup() {
         formData.append("resume_file", resumeFile);
       }
 
-      // 2. Send request to FastAPI backend
-      const response = await fetch("http://localhost:8000/api/interview/start", {
-        method: "POST",
-        body: formData,
+      // 2. Send request using your central Axios instance (handles timeout & auth token automatically)
+      const res = await api.post("/interview/start", formData, {
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}` // Ensure auth is passed
-        }
+          "Content-Type": "multipart/form-data",
+        },
       });
 
-      // Parse response first so we can read the backend's exact error details
-      const data = await response.json();
-
-      // ─── PAYWALL & ERROR HANDLING ───
-      if (!response.ok) {
-        if (response.status === 403) {
-          // This gracefully catches the Free/Pro limit error from the backend
-          alert(`💎 Limit Reached: ${data.detail}\n\nPlease upgrade your plan to continue practicing.`);
-          // navigate("/pricing"); // You can uncomment this later to auto-redirect to a pricing page
-          return;
-        }
-        throw new Error(data.detail || "Failed to start session");
-      }
+      const data = res.data;
 
       // 3. Navigate to the room, passing the backend's response data
       navigate("/interview-room", { 
@@ -97,7 +84,15 @@ export default function InterviewSetup() {
 
     } catch (error) {
       console.error("Error starting interview:", error);
-      alert(error.message || "Could not connect to the AI interviewer. Please try again.");
+      
+      // Gracefully catch backend error details if thrown by Axios
+      const errorDetail = error.response?.data?.detail;
+      if (error.response && error.response.status === 403) {
+        alert(`💎 Limit Reached: ${errorDetail}\n\nPlease upgrade your plan to continue practicing.`);
+        return;
+      }
+
+      alert(errorDetail || error.message || "Could not connect to the AI interviewer. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -368,7 +363,6 @@ export default function InterviewSetup() {
                 </span>
                 <span style={{ fontSize: 11, color: "#555577", marginBottom: 4 }}>Max size: 5MB</span>
                 
-                {/* Highlighted text to encourage users to upload their CV */}
                 <span style={{ fontSize: 11, color: "#8B5CF6", fontStyle: "italic", textAlign: "center", maxWidth: "80%" }}>
                   💡 Highly recommended! The AI will read your resume to ask hyper-specific questions about your past projects.
                 </span>
