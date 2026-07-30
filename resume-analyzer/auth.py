@@ -15,7 +15,6 @@ from utils import create_verification_token, send_verification_email
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import interview
 from fastapi import BackgroundTasks
 
 Base.metadata.create_all(bind=engine)
