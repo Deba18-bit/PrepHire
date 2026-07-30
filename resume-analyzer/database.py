@@ -1,16 +1,23 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-DATABASE_URL = "postgresql://prephire_user:password123@localhost/prephire"
+# Load variables from the .env file
+load_dotenv()
 
+# Pull the hidden URL from the .env file
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Create the database engine
 engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# Dependency — gets database session for each request
+# Dependency - gets database session for each request
 def get_db():
     db = SessionLocal()
     try:
