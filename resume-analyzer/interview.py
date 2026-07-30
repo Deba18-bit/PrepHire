@@ -39,7 +39,7 @@ class InterviewEvaluation(BaseModel):
 
 
 # ─── 1. Start the Interview Session ───
-@router.post("/api/interview/start")
+@router.post("/interview/start")
 async def start_interview(
     target_role: str = Form(...),
     experience_level: str = Form(...),
@@ -54,10 +54,8 @@ async def start_interview(
             InterviewSession.user_id == current_user.id
         ).count()
 
-        # Safely get the user's plan (default to 'free' if not set)
         user_plan = getattr(current_user, 'plan', 'free').lower()
 
-        # Enforce the paywall blocks
         if user_plan == 'free' and past_interviews_count >= 2:
             raise HTTPException(
                 status_code=403, 
@@ -70,13 +68,11 @@ async def start_interview(
                 detail="Pro plan limit reached (15 mock interviews). Please upgrade to Max for unlimited practice."
             )
 
-        # ─── CONTINUE STARTING THE INTERVIEW ───
         # Handle Optional Resume Parsing
         resume_context = ""
         if resume_file:
             resume_context = f"\n\nHere is the candidate's resume for context. Tailor your questions to their past projects and experience if relevant."
 
-        # The Master System Prompt
         system_instruction = f"""You are a strict, professional Senior Engineering Manager at a top-tier tech company. 
         You are conducting a {interview_focus} interview for a {experience_level} {target_role} position.
         
@@ -90,7 +86,6 @@ async def start_interview(
         7. On your 12th and final question, conclude the interview naturally and include the exact text [INTERVIEW_COMPLETE] at the very end of your response.
         {resume_context}"""
     
-        # Initialize the Gemini Chat
         chat = client.chats.create(
             model="gemini-3.1-flash-lite",
             config=types.GenerateContentConfig(
@@ -99,10 +94,8 @@ async def start_interview(
             )
         )
 
-        # Trigger the AI to speak first
         response = chat.send_message("The candidate has entered the room. Start the interview.")
 
-        # Create Database Record
         session_id = str(uuid.uuid4())
         
         initial_history = [
@@ -127,7 +120,6 @@ async def start_interview(
         }
 
     except HTTPException:
-        # Re-raise HTTP exceptions to send correct status code to frontend
         raise
     except Exception as e:
         print("\n❌ ❌ ❌ INTERVIEW START ERROR ❌ ❌ ❌")
@@ -137,7 +129,7 @@ async def start_interview(
 
 
 # ─── 2. Handle the Back-and-Forth Conversation ───
-@router.post("/api/interview/reply")
+@router.post("/interview/reply")
 async def reply_interview(
     data: ReplyRequest,
     db: Session = Depends(get_db),
@@ -209,12 +201,11 @@ async def reply_interview(
 
 
 # ─── 3. Get History for Dashboard ───
-@router.get("/api/interviews/history")
+@router.get("/interviews/history")
 async def get_interview_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Fetch user's sessions, ordered by newest first
     sessions = db.query(InterviewSession).filter(
         InterviewSession.user_id == current_user.id
     ).order_by(InterviewSession.created_at.desc()).all()
@@ -225,7 +216,7 @@ async def get_interview_history(
             "id": s.id,
             "target_role": s.target_role,
             "interview_focus": s.interview_focus,
-            "date": s.created_at.strftime("%d %b %Y"), # e.g., 29 Jul 2026
+            "date": s.created_at.strftime("%d %b %Y"),
             "score": s.score or 0,
             "grade": s.grade or "N/A"
         })
@@ -234,7 +225,7 @@ async def get_interview_history(
 
 
 # ─── 4. Generate or Fetch Detailed Report ───
-@router.get("/api/interviews/report/{session_id}")
+@router.get("/interviews/report/{session_id}")
 async def get_interview_report(
     session_id: str,
     db: Session = Depends(get_db),
@@ -248,7 +239,6 @@ async def get_interview_report(
     if not session:
         raise HTTPException(status_code=404, detail="Interview not found")
 
-    # If the report was already generated, just return it instantly
     if session.report_data:
         report = session.report_data
         report["target_role"] = session.target_role
@@ -256,7 +246,6 @@ async def get_interview_report(
         report["experience_level"] = session.experience_level
         return report
 
-    # If no report exists, GENERATE it now using Gemini
     transcript = ""
     for msg in session.chat_history:
         role_label = "Interviewer" if msg["role"] == "model" else "Candidate"
@@ -283,7 +272,6 @@ async def get_interview_report(
     """
 
     try:
-        # Ask Gemini to evaluate and force JSON structure
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
             contents=transcript,
@@ -291,19 +279,17 @@ async def get_interview_report(
                 system_instruction=system_prompt,
                 response_mime_type="application/json",
                 response_schema=InterviewEvaluation,
-                temperature=0.2, # Keep it objective and analytical
+                temperature=0.2,
             ),
         )
 
         evaluation = json.loads(response.text)
 
-        # Save to database so we don't have to re-evaluate this session again
         session.score = evaluation["score"]
         session.grade = evaluation["grade"]
         session.report_data = evaluation
         db.commit()
 
-        # Combine with base session info for the frontend
         evaluation["target_role"] = session.target_role
         evaluation["interview_focus"] = session.interview_focus
         evaluation["experience_level"] = session.experience_level

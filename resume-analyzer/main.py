@@ -40,7 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(interview.router)
+# ─── Include Interview Router with /api prefix ───
+app.include_router(interview.router, prefix="/api")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 class SignupRequest(BaseModel):
@@ -65,7 +67,6 @@ def signup(request: Request, data: SignupRequest, db: Session = Depends(get_db))
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered. Please log in.")
 
-    # Create brand new user instantly verified
     user = User(
         full_name=data.full_name,
         email=data.email,
@@ -76,7 +77,6 @@ def signup(request: Request, data: SignupRequest, db: Session = Depends(get_db))
     db.commit()
     db.refresh(user)
 
-    # Automatically generate access token so they are logged in right away
     access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
     
     return {
