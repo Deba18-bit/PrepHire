@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
+
 // ── Scroll animation hook ──────────────────────────────────────────
 function useInView(options = {}) {
   const ref = useRef(null);
@@ -145,6 +146,14 @@ const testimonials = [
 export default function Home() {
   const navigate = useNavigate();
 
+  // ── AUTH CHECK: Prevent logged-in users from seeing the landing page ──
+  useEffect(() => {
+    const token = localStorage.getItem("token"); 
+    if (token) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
+
   // Splash screen
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -228,7 +237,7 @@ export default function Home() {
   return (
     <div style={{ background: "#080808", minHeight: "100vh", color: "#fff", fontFamily: "'DM Sans', sans-serif", overflowX: "hidden" }}>
 
-      {/* Google Font */}
+      {/* Google Font & Uniform Card Layout Fixes */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -276,12 +285,31 @@ export default function Home() {
         }
         .btn-outline:hover { border-color: #555; background: #111; }
 
+        /* Standard flexible grid */
+        .uniform-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px;
+          align-items: stretch;
+        }
+
+        /* Strict 4-column grid for the Process steps */
+        .process-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 20px;
+          align-items: stretch;
+        }
+
         .pillar-card {
           background: #0f0f0f;
           border: 1px solid #1a1a1a;
           border-radius: 12px;
           padding: 28px;
           transition: border-color 0.3s, transform 0.3s;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
         .pillar-card:hover { border-color: #333; transform: translateY(-4px); }
 
@@ -289,8 +317,11 @@ export default function Home() {
           background: #0f0f0f;
           border: 1px solid #1a1a1a;
           border-radius: 12px;
-          padding: 32px;
+          padding: 24px;
           transition: border-color 0.3s;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
         .step-card:hover { border-color: #2a2a2a; }
 
@@ -301,6 +332,10 @@ export default function Home() {
           padding: 32px;
           transition: border-color 0.3s, transform 0.3s;
           position: relative;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
         }
         .pricing-card:hover { transform: translateY(-4px); }
         .pricing-card.highlighted {
@@ -313,6 +348,10 @@ export default function Home() {
           border: 1px solid #1a1a1a;
           border-radius: 12px;
           padding: 28px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
         }
       `}</style>
 
@@ -338,8 +377,8 @@ export default function Home() {
           <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.3px" }}>PrepHire</span>
         </div>
 
-        {/* Links */  /* Auth */}
-        <div style={{ display: "flex", alignItems:"", gap: 25 }}>
+        {/* Links & Auth */}
+        <div style={{ display: "flex", alignItems: "center", gap: 25 }}>
           <button className="nav-link" onClick={() => scrollTo("features")}>Features</button>
           <button className="nav-link" onClick={() => scrollTo("interview")}>Interview</button>
           <button className="nav-link" onClick={() => scrollTo("how-it-works")}>How it Works</button>
@@ -469,7 +508,7 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+        <div className="uniform-grid">
           {[
             { icon: "⊗", title: "ATS Rejection", stat: "76%", desc: "of resumes never reach a human. Automated systems reject them before anyone reads a word." },
             { icon: "⊘", title: "Outdated Skills", stat: "2 yrs", desc: "Your skills may have been relevant 2 years ago. The market moves fast. PrepHire checks against live data." },
@@ -501,7 +540,7 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        <div className="uniform-grid">
           {pillars.map((pillar, i) => (
             <Reveal key={pillar.title} delay={i * 0.08}>
               <div className="pillar-card">
@@ -523,72 +562,72 @@ export default function Home() {
       </section>
 
       {/* ── Interview Practice Section ── */}
-<section id="interview" style={{ padding: "100px 24px", maxWidth: 1100, margin: "0 auto" }}>
-  <div style={{
-    background: "#0f0f0f",
-    border: "1px solid #1a1a1a",
-    borderRadius: 20,
-    padding: "60px 48px",
-    display: "flex",
-    gap: 60,
-    alignItems: "center",
-    flexWrap: "wrap",
-  }}>
-    {/* Left */}
-    <div style={{ flex: 1, minWidth: 280 }}>
-      <Reveal>
-        <span style={{ fontSize: 12, letterSpacing: "0.15em", color: "#4F7EFF", textTransform: "uppercase", fontWeight: 600 }}>
-          Bonus Feature
-        </span>
-        <h2 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 800, marginTop: 12, letterSpacing: "-1px", lineHeight: 1.1 }}>
-          AI Interview Coach.
-          <br />
-          <span style={{ background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            No Resume Needed.
-          </span>
-        </h2>
-        <p style={{ color: "#555", fontSize: 15, marginTop: 16, lineHeight: 1.7, maxWidth: 420 }}>
-          Just tell us your target role and experience level. Our AI interviewer asks real industry questions, scores your answers, and gives you specific feedback — exactly like a real interview.
-        </p>
-        <button
-          className="btn-primary"
-          style={{ marginTop: 28, padding: "13px 28px", fontSize: 15 }}
-          onClick={() => navigate("/signup")}
-        >
-          Start Practice Interview →
-        </button>
-      </Reveal>
-    </div>
-
-    {/* Right — Feature list */}
-    <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 16 }}>
-      {[
-        { icon: "◈", title: "No Resume Required", desc: "Just enter your role, field, and experience level. Start instantly." },
-        { icon: "◎", title: "Real Industry Questions", desc: "AI asks field-specific questions tailored to your target role and seniority." },
-        { icon: "◇", title: "Live Answer Scoring", desc: "Every answer scored on content, clarity, confidence, and structure." },
-        { icon: "◉", title: "Selection Probability", desc: "Final score with interview readiness percentage and improvement areas." },
-      ].map((item, i) => (
-        <Reveal key={item.title} delay={i * 0.08}>
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-              background: "linear-gradient(135deg, rgba(79,126,255,0.15), rgba(139,92,246,0.15))",
-              border: "1px solid rgba(79,126,255,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, color: "#4F7EFF",
-            }}>
-              {item.icon}
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{item.title}</div>
-              <div style={{ color: "#555", fontSize: 13, lineHeight: 1.6 }}>{item.desc}</div>
-            </div>
+      <section id="interview" style={{ padding: "100px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{
+          background: "#0f0f0f",
+          border: "1px solid #1a1a1a",
+          borderRadius: 20,
+          padding: "60px 48px",
+          display: "flex",
+          gap: 60,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}>
+          {/* Left */}
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <Reveal>
+              <span style={{ fontSize: 12, letterSpacing: "0.15em", color: "#4F7EFF", textTransform: "uppercase", fontWeight: 600 }}>
+                Bonus Feature
+              </span>
+              <h2 style={{ fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 800, marginTop: 12, letterSpacing: "-1px", lineHeight: 1.1 }}>
+                AI Interview Coach.
+                <br />
+                <span style={{ background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  No Resume Needed.
+                </span>
+              </h2>
+              <p style={{ color: "#555", fontSize: 15, marginTop: 16, lineHeight: 1.7, maxWidth: 420 }}>
+                Just tell us your target role and experience level. Our AI interviewer asks real industry questions, scores your answers, and gives you specific feedback — exactly like a real interview.
+              </p>
+              <button
+                className="btn-primary"
+                style={{ marginTop: 28, padding: "13px 28px", fontSize: 15 }}
+                onClick={() => navigate("/signup")}
+              >
+                Start Practice Interview →
+              </button>
+            </Reveal>
           </div>
-        </Reveal>
-      ))}
-    </div>
-  </div>
-</section>
+
+          {/* Right — Feature list */}
+          <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              { icon: "◈", title: "No Resume Required", desc: "Just enter your role, field, and experience level. Start instantly." },
+              { icon: "◎", title: "Real Industry Questions", desc: "AI asks field-specific questions tailored to your target role and seniority." },
+              { icon: "◇", title: "Live Answer Scoring", desc: "Every answer scored on content, clarity, confidence, and structure." },
+              { icon: "◉", title: "Selection Probability", desc: "Final score with interview readiness percentage and improvement areas." },
+            ].map((item, i) => (
+              <Reveal key={item.title} delay={i * 0.08}>
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: "linear-gradient(135deg, rgba(79,126,255,0.15), rgba(139,92,246,0.15))",
+                    border: "1px solid rgba(79,126,255,0.2)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 14, color: "#4F7EFF",
+                  }}>
+                    {item.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{item.title}</div>
+                    <div style={{ color: "#555", fontSize: 13, lineHeight: 1.6 }}>{item.desc}</div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ── How it Works ── */}
       <section id="how-it-works" style={{ padding: "100px 24px", maxWidth: 1100, margin: "0 auto" }}>
@@ -601,7 +640,7 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        <div className="process-grid">
           {steps.map((step, i) => (
             <Reveal key={step.num} delay={i * 0.1}>
               <div className="step-card">
@@ -628,7 +667,7 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, alignItems: "start" }}>
+        <div className="uniform-grid">
           {pricing.map((plan, i) => (
             <Reveal key={plan.name} delay={i * 0.1}>
               <div className={`pricing-card ${plan.highlight ? "highlighted" : ""}`}>
@@ -642,25 +681,27 @@ export default function Home() {
                   }}>Most Popular</div>
                 )}
 
-                <div style={{ marginBottom: 8 }}>
-                  <span style={{ fontSize: 14, color: "#666", fontWeight: 600 }}>{plan.name}</span>
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, color: "#666", fontWeight: 600 }}>{plan.name}</span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
+                    <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-1px" }}>{plan.price}</span>
+                    <span style={{ color: "#555", fontSize: 14 }}>{plan.period}</span>
+                  </div>
+
+                  <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>{plan.desc}</p>
+
+                  <ul style={{ listStyle: "none", marginBottom: 28, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {plan.features.map((f) => (
+                      <li key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#aaa" }}>
+                        <span style={{ color: "#4F7EFF", fontSize: 16 }}>✓</span>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                  <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-1px" }}>{plan.price}</span>
-                  <span style={{ color: "#555", fontSize: 14 }}>{plan.period}</span>
-                </div>
-
-                <p style={{ color: "#555", fontSize: 14, marginBottom: 24 }}>{plan.desc}</p>
-
-                <ul style={{ listStyle: "none", marginBottom: 28, display: "flex", flexDirection: "column", gap: 10 }}>
-                  {plan.features.map((f) => (
-                    <li key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#aaa" }}>
-                      <span style={{ color: "#4F7EFF", fontSize: 16 }}>✓</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
 
                 <button
                   className={plan.highlight ? "btn-primary" : "btn-outline"}
@@ -686,12 +727,14 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        <div className="uniform-grid">
           {testimonials.map((t, i) => (
             <Reveal key={t.name} delay={i * 0.1}>
               <div className="testimonial-card">
-                <div style={{ fontSize: 28, color: "#4F7EFF", marginBottom: 16, lineHeight: 1 }}>"</div>
-                <p style={{ color: "#aaa", fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>{t.text}</p>
+                <div>
+                  <div style={{ fontSize: 28, color: "#4F7EFF", marginBottom: 16, lineHeight: 1 }}>"</div>
+                  <p style={{ color: "#aaa", fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>{t.text}</p>
+                </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{t.name}</div>
                   <div style={{ color: "#555", fontSize: 13, marginTop: 2 }}>{t.role}</div>

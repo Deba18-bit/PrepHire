@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, JSON, DateTime, Boolean, ForeignKey
 from sqlalchemy.sql import func
 from database import Base
+import datetime
 
 class User(Base):
     __tablename__ = "users"
@@ -29,3 +30,19 @@ class ResumeAnalysis(Base):
     grade = Column(String)
     full_analysis = Column(JSON)
     created_at = Column(DateTime, default=func.now())
+
+class InterviewSession(Base):
+    __tablename__ = "interview_sessions"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    target_role = Column(String)
+    experience_level = Column(String)
+    interview_focus = Column(String)
+    chat_history = Column(JSON, default=[])
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(String, default="in_progress")
+    score = Column(Integer, nullable=True)
+    grade = Column(String, nullable=True)
+    report_data = Column(JSON, nullable=True) # Stores the full pillar breakdown
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

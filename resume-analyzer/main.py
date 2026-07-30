@@ -9,13 +9,15 @@ from models import ResumeAnalysis, User, Base
 from schemas import UserSignup, UserLogin, TokenResponse
 from pdf_extractor import extract_text_from_pdf
 from ai_analyzer import analyze_resume
-from auth import hash_password, verify_password, create_access_token, verify_token
+# 👇 Notice get_current_user is now imported from auth here 👇
+from auth import hash_password, verify_password, create_access_token, verify_token, get_current_user
 import jwt
 import os
 from utils import create_verification_token, send_verification_email
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import interview
 
 Base.metadata.create_all(bind=engine)
 
@@ -26,34 +28,16 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # React's default port
+    allow_origins=["http://localhost:3000"], 
     allow_credentials=True,
-    allow_methods=["*"], # This allows the OPTIONS method to pass
+    allow_methods=["*"], 
     allow_headers=["*"],
 )
 
+app.include_router(interview.router)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# ─── Helper — get current user from token ───
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-security = HTTPBearer()
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    token = credentials.credentials
-    payload = verify_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
-        )
-    user = db.query(User).filter(User.id == payload.get("user_id")).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found or banned")
-    return user
 
 # ─── Sign Up ───
 @app.post("/signup")
@@ -164,6 +148,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         full_name=user.full_name,
         plan=user.plan
     )
+    
 # ─── Get current user profile ───
 @app.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):

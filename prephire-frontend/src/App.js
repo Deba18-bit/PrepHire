@@ -3,11 +3,14 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import VerifyEmail from './pages/VerifyEmail.jsx'; // <-- NEW IMPORT
+import VerifyEmail from './pages/VerifyEmail.jsx'; // 
 import Dashboard from './pages/Dashboard';
 import Analysis from './pages/Analysis';
 import InterviewSetup from './pages/InterviewSetup';
 import Pricing from './pages/Pricing';
+import InterviewRoom from "./pages/InterviewRoom";
+import InterviewDashboard from "./pages/InterviewDashboard";
+import InterviewReport from "./pages/InterviewReport";
 
 function App() {
   return (
@@ -22,6 +25,9 @@ function App() {
         <Route path="/analysis/:id" element={<Analysis />} />
         <Route path="/interview-setup" element={<InterviewSetup />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/interview-room" element={<InterviewRoom />} />
+        <Route path="/interviews" element={<InterviewDashboard />} />
+        <Route path="/interview-report/:id" element={<InterviewReport />} />
       </Routes>
     </Router>
   );

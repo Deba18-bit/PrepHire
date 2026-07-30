@@ -22,8 +22,20 @@ export default function Login() {
       }));
       navigate("/dashboard");
     } catch (err) {
+      if (err.response && err.response.data && err.response.data.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          // Extract the exact message, e.g., "value is not a valid email address"
+          setError(detail[0].msg); 
+        }
+        else if (typeof detail === 'string') {
+          setError(detail);
+        }else {
+          setError("An unexpected error occurred.");
+        }
+      }else{
       setError(err.response?.data?.detail || "Invalid email or password");
-    } finally {
+    } }finally {
       setLoading(false);
     }
   };

@@ -1,6 +1,9 @@
 import os
 from google import genai
+import json
 from dotenv import load_dotenv
+from langchain_tavily import TavilySearch
+import re
 
 load_dotenv()
 
@@ -9,11 +12,68 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=api_key)
 
+search_tool = TavilySearch(max_results=2)
+
+def fetch_market_context(target_role: str) -> str:
+    """
+    Executes compressed Tavily queries to get real-time 2026 job market data
+    for Certifications, Future-Proof Skills, and Projects.
+    """
+    queries = {
+        " (Certifications)": (
+            f"Most valuable vs overrated certifications for {target_role} "
+            f"fresher in India 2026 and what certs top companies look for."
+        ),
+        " (Market Trends)": (
+            f"Top emerging in-demand skills, obsolete technologies, "
+            f"and salary trends for {target_role} job postings in India 2026."
+        ),
+        " (Project Validator)": (
+            f"Impressive portfolio projects vs overused resume projects to avoid "
+            f"for a {target_role} fresher in India 2026."
+        )
+    }
+
+    rag_snippets = []
+    sources_list = []
+
+    for pillar, query in queries.items():
+        try:
+            response = search_tool.invoke({"query": query})
+            results = response.get("results", [])
+            
+            rag_snippets.append(f"=== {pillar} LIVE DATA ===")
+            for res in results:
+                snippet = res.get("content", "").strip()
+                url = res.get("url", "")
+                title = res.get("title", url)
+                if snippet:
+                    rag_snippets.append(f"- Source ({url}): {snippet}")
+                    sources_list.append({
+                        "pillar": pillar,
+                        "title": title,
+                        "url": url,
+                        "snippet": snippet
+                    })
+        except Exception as e:
+            # Fallback safety: If Tavily fails/times out, resume scanning won't crash
+            rag_snippets.append(f"=== {pillar} LIVE DATA ===\n- Search unavailable: {str(e)}")
+
+    return "\n\n".join(rag_snippets), sources_list
+
 def analyze_resume(resume_text: str, target_role: str) -> dict:
+
+    # 1. Fetch real-time market context via Tavily
+    mmarket_context_text, market_sources = fetch_market_context(target_role)
+
+    # 2. Build system prompt with Live RAG Context injected
     
     prompt = f"""
     You are PrepHire, a brutally honest resume analyzer. Analyze this resume strictly.
     Target Role: {target_role}
+
+    LIVE MARKET CONTEXT (Real-Time 2026 Industry Standards):
+    {mmarket_context_text}
     
     
     Resume Text:
@@ -32,11 +92,11 @@ PILLAR 1 — DESIGN & ATS (max 15 points):
 - Perfect ATS formatting → up to 15
 
 PILLAR 2 — CREDENTIALS (max 10 points):
-- Automatically identify valuable certifications for {target_role}
+- Use LIVE MARKET CONTEXT above to evaluate certification value for {target_role}
 - No certifications → max 4
-- Irrelevant certifications → max 5
+- Irrelevant/Overrated certifications → max 5
 - Participation only (Forage, hackathon attendance) → 1 point max each
-- Relevant strong certifications → up to 10
+- Relevant strong certifications matching live market context → up to 10
 
 PILLAR 3 — EXPERIENCE (max 35 points):
 - Zero internship → max 15
@@ -46,19 +106,19 @@ PILLAR 3 — EXPERIENCE (max 35 points):
 - Internship completely irrelevant to {target_role} → max 10
 
 PILLAR 4 — FUTURE PROOF SKILLS (max 20 points):
-- Automatically identify top 5 in-demand skills for {target_role}
+- Use LIVE MARKET CONTEXT above to cross-check top in-demand 2026 skills for {target_role}
 - Skills completely irrelevant to {target_role} → max 5
 - Listed but not demonstrated in projects → half points only
 - Missing top 3 skills for {target_role} → cannot exceed 12
-- Strong demonstrated skill match → up to 20
+- Strong demonstrated skill match with modern tech stack → up to 20
 
 PILLAR 5 — PROJECTS (max 20 points):
-- Automatically judge project relevance for {target_role}
+- Use LIVE MARKET CONTEXT above to judge project relevance and complexity for {target_role}
 - Projects completely irrelevant to {target_role} → max 8
 - No live links or GitHub → deduct 4 points
-- Tutorial clone projects → max 10
+- Tutorial clone or overused projects (identified in live context) → max 10
 - Partially relevant projects → up to 14
-- Highly relevant projects with live links → up to 20
+- Highly relevant, unique projects matching 2026 market expectations with live links → up to 20
 
 ROLE SWITCH PENALTY:
 - If candidate's entire background is irrelevant to {target_role}
@@ -90,7 +150,7 @@ STRICT RULES:
             "pillar_2_credentials": {{
                 "score": <0-10>,
                 "max_score": 10,
-                "reason": "<specific reason>",
+                "reason": "<specific reason grounded in live market data>",
                 "improvements": ["<fix 1>", "<fix 2>"]
             }},
             "pillar_3_experience": {{
@@ -102,13 +162,13 @@ STRICT RULES:
             "pillar_4_future_proof": {{
                 "score": <0-20>,
                 "max_score": 20,
-                "reason": "<specific reason>",
+                "reason": "<specific reason based on 2026 skill demand>",
                 "improvements": ["<fix 1>", "<fix 2>"]
             }},
             "pillar_5_projects": {{
                 "score": <0-20>,
                 "max_score": 20,
-                "reason": "<specific reason>",
+                "reason": "<specific reason comparing projects to 2026 standards>",
                 "improvements": ["<fix 1>", "<fix 2>"]
             }}
         }},
@@ -130,5 +190,8 @@ STRICT RULES:
     # Remove markdown code blocks if present
     text = re.sub(r'```json\n?', '', text)
     text = re.sub(r'```\n?', '', text)
+
+    analysis_data = json.loads(text.strip())
     
-    return json.loads(text.strip())
+    analysis_data["market_sources"] = market_sources
+    return analysis_data

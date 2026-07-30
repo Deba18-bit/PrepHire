@@ -8,45 +8,59 @@ export default function Dashboard() {
   const [analyses, setAnalyses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [targetRole, setTargetRole] = useState("Software Engineer");
+  const [targetRole, setTargetRole] = useState("Software Developer");
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showAllScans, setShowAllScans] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) { navigate("/login"); return; }
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [meRes, analysesRes] = await Promise.all([getMe(), getMyAnalyses()]);
-      setUser(meRes.data);
-      setAnalyses(analysesRes.data.reverse());
-    } catch {
-      localStorage.removeItem("token");
-      navigate("/login");
-    } finally {
-      setLoading(false);
+    if (!token) { 
+      navigate("/login"); 
+      return; 
     }
-  };
 
-  const handleUpload = async (file) => {
+    const fetchData = async () => {
+      try {
+        const [meRes, analysesRes] = await Promise.all([getMe(), getMyAnalyses()]);
+        setUser(meRes.data);
+        setAnalyses(analysesRes.data.reverse());
+      } catch {
+        localStorage.removeItem("token");
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [navigate]);
+
+  const handleFileSelect = (file) => {
     if (!file || file.type !== "application/pdf") {
       setError("Please upload a PDF file only.");
       return;
     }
+    setSelectedFile(file);
+    setError("");
+  };
+
+  const handleStartAnalysis = async () => {
+    if (!selectedFile) return;
+    
     setUploading(true);
     setError("");
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", selectedFile);
       const res = await uploadResume(formData, targetRole);
       navigate(`/analysis/${res.data.id}`, { state: { analysis: res.data } });
     } catch (err) {
       setError(err.response?.data?.detail || "Upload failed. Try again.");
     } finally {
       setUploading(false);
+      setSelectedFile(null);
     }
   };
 
@@ -318,7 +332,7 @@ export default function Dashboard() {
               </span>
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown Menu (Account Settings Removed) */}
             <div className="profile-menu">
               <div
                 style={{
@@ -411,21 +425,18 @@ export default function Dashboard() {
                 </span>
               </div>
 
-              <div className="menu-divider" />
-
-              <div className="menu-item" onClick={() => navigate("/settings")}>
-                <span style={{ fontSize: 16 }}>⚙️</span> Account Settings
-              </div>
-
               {user?.plan !== "max" && (
-                <div
-                  className="menu-item"
-                  onClick={() => navigate("/pricing")}
-                  style={{ color: "#4F7EFF" }}
-                >
-                  <span style={{ fontSize: 16 }}>⚡</span>
-                  {user?.plan === "free" ? "Upgrade to Pro" : "Upgrade to Max"}
-                </div>
+                <>
+                  <div className="menu-divider" />
+                  <div
+                    className="menu-item"
+                    onClick={() => navigate("/pricing")}
+                    style={{ color: "#4F7EFF" }}
+                  >
+                    <span style={{ fontSize: 16 }}>⚡</span>
+                    {user?.plan === "free" ? "Upgrade to Pro" : "Upgrade to Max"}
+                  </div>
+                </>
               )}
 
               <div className="menu-divider" />
@@ -442,8 +453,10 @@ export default function Dashboard() {
         </div>
       </nav>
 
+      {/* Main Centered Container */}
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "48px 24px" }}>
-        {/* Welcome Section - Gradient Added */}
+        
+        {/* Welcome Section */}
         <div style={{ marginBottom: 48 }}>
           <h1
             style={{
@@ -538,13 +551,13 @@ export default function Dashboard() {
             <div
               onDragOver={(e) => {
                 e.preventDefault();
-                setDragOver(true);
+                if (!selectedFile) setDragOver(true);
               }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
-                handleUpload(e.dataTransfer.files[0]);
+                if (!selectedFile) handleFileSelect(e.dataTransfer.files[0]);
               }}
               style={{
                 border: `1px dashed ${dragOver ? "#4F7EFF" : "#222"}`,
@@ -555,14 +568,16 @@ export default function Dashboard() {
                 background: dragOver ? "rgba(79,126,255,0.05)" : "#080808",
                 cursor: "pointer",
               }}
-              onClick={() => document.getElementById("resume-upload").click()}
+              onClick={() => {
+                if (!selectedFile) document.getElementById("resume-upload").click();
+              }}
             >
               <input
                 id="resume-upload"
                 type="file"
                 accept=".pdf"
                 style={{ display: "none" }}
-                onChange={(e) => handleUpload(e.target.files[0])}
+                onChange={(e) => handleFileSelect(e.target.files[0])}
               />
 
               {uploading ? (
@@ -591,6 +606,38 @@ export default function Dashboard() {
                     Scanning document...
                   </p>
                   <style>{`@keyframes analyzing { 0%{transform:translateX(-100%)} 100%{transform:translateX(300%)} }`}</style>
+                </div>
+              ) : selectedFile ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div style={{ fontWeight: 600, color: "#eee", fontSize: 15, wordBreak: "break-all" }}>
+                    📄 {selectedFile.name}
+                  </div>
+                  <button
+                    className="btn-primary"
+                    style={{ width: "100%", padding: "14px", fontSize: 15 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartAnalysis();
+                    }}>Start AI Analysis →
+                      </button>
+                      <button
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#666",
+                      fontSize: 13,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: "4px",
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFile(null);
+                      document.getElementById("resume-upload").value = "";
+                    }}
+                  >
+                    Cancel / Choose Different File
+                  </button>
                 </div>
               ) : (
                 <div>
@@ -675,7 +722,7 @@ export default function Dashboard() {
                 marginBottom: 32,
               }}
             >
-              Skip the resume upload. Tell us your target role and experience
+              Tell us your target role and experience
               level, and our AI will conduct a live, interactive interview
               tailored exactly to your field.
             </p>
@@ -734,17 +781,40 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Past Analyses */}
+        {/* ─── Recent Scans with Show More / Show Less ─── */}
         <div>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-end",
+              alignItems: "center",
               marginBottom: 24,
             }}
           >
             <h2 style={{ fontSize: 20, fontWeight: 700 }}>Recent Scans</h2>
+            
+            <button 
+              onClick={() => navigate("/interviews")}
+              style={{ 
+                background: "rgba(139, 92, 246, 0.1)", 
+                border: "1px solid rgba(139, 92, 246, 0.3)", 
+                color: "#8B5CF6", 
+                padding: "8px 16px", 
+                borderRadius: 8, 
+                fontSize: 13, 
+                fontWeight: 600, 
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(139, 92, 246, 0.2)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(139, 92, 246, 0.1)";
+              }}
+            >
+              View Interview Analysis →
+            </button>
           </div>
 
           {analyses.length === 0 ? (
@@ -763,7 +833,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {analyses.map((a) => (
+              {(showAllScans ? analyses : analyses.slice(0, 3)).map((a) => (
                 <div
                   key={a.id}
                   className="analysis-card"
@@ -872,233 +942,105 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+
+              {analyses.length > 3 && (
+                <button
+                  onClick={() => setShowAllScans(!showAllScans)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #222",
+                    color: "#888",
+                    padding: "12px",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    marginTop: 8,
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#fff";
+                    e.currentTarget.style.borderColor = "#444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#888";
+                    e.currentTarget.style.borderColor = "#222";
+                  }}
+                >
+                  {showAllScans ? "Show Less ↑" : `Show More (${analyses.length - 3} more) ↓`}
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* ── Minimal Footer with Active Social Links ── */}
       <footer
         style={{
           borderTop: "1px solid #111",
-          padding: "60px 40px 40px",
+          padding: "40px 40px",
           marginTop: 80,
         }}
       >
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "40px 80px",
-              marginBottom: 60,
-            }}
-          >
-            {/* Brand */}
-            <div style={{ flex: "1 1 250px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 10,
-                    fontWeight: 800,
-                    color: "#fff",
-                  }}
-                >
-                  PH
-                </div>
-                <span style={{ fontWeight: 700, fontSize: 16, color: "#fff" }}>
-                  PrepHire
-                </span>
-              </div>
-              <p style={{ color: "#666", fontSize: 13, lineHeight: 1.6 }}>
-                AI-powered interview and resume coaching. Stop guessing, start
-                preparing, and land your next role.
-              </p>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 10,
+                fontWeight: 800,
+                color: "#fff",
+              }}
+            >
+              PH
             </div>
-
-            {/* Links Columns */}
-            <div style={{ flex: "1 1 120px" }}>
-              <h4
-                style={{
-                  color: "#eee",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  marginBottom: 20,
-                }}
-              >
-                Product
-              </h4>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 14 }}
-              >
-                {["Resume Scanner", "AI Interview", "Pricing", "Changelog"].map(
-                  (link) => (
-                    <span
-                      key={link}
-                      style={{
-                        color: "#888",
-                        fontSize: 13,
-                        cursor: "pointer",
-                        transition: "color 0.2s",
-                      }}
-                      onMouseOver={(e) => (e.target.style.color = "#fff")}
-                      onMouseOut={(e) => (e.target.style.color = "#888")}
-                    >
-                      {link}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-
-            <div style={{ flex: "1 1 120px" }}>
-              <h4
-                style={{
-                  color: "#eee",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  marginBottom: 20,
-                }}
-              >
-                Support
-              </h4>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 14 }}
-              >
-                {[
-                  "Help Center",
-                  "Contact Us",
-                  "System Status",
-                  "Community",
-                ].map((link) => (
-                  <span
-                    key={link}
-                    style={{
-                      color: "#888",
-                      fontSize: 13,
-                      cursor: "pointer",
-                      transition: "color 0.2s",
-                    }}
-                    onMouseOver={(e) => (e.target.style.color = "#fff")}
-                    onMouseOut={(e) => (e.target.style.color = "#888")}
-                  >
-                    {link}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ flex: "1 1 120px" }}>
-              <h4
-                style={{
-                  color: "#eee",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  marginBottom: 20,
-                }}
-              >
-                Legal
-              </h4>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 14 }}
-              >
-                {[
-                  "Privacy Policy",
-                  "Terms of Service",
-                  "Cookie Policy",
-                  "Security",
-                ].map((link) => (
-                  <span
-                    key={link}
-                    style={{
-                      color: "#888",
-                      fontSize: 13,
-                      cursor: "pointer",
-                      transition: "color 0.2s",
-                    }}
-                    onMouseOver={(e) => (e.target.style.color = "#fff")}
-                    onMouseOut={(e) => (e.target.style.color = "#888")}
-                  >
-                    {link}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <span style={{ fontWeight: 700, fontSize: 16, color: "#fff" }}>
+              PrepHire
+            </span>
+            <span style={{ color: "#444", margin: "0 8px" }}>•</span>
+            <span style={{ color: "#666", fontSize: 13 }}>
+              © {new Date().getFullYear()} PrepHire. All rights reserved.BUILT BY DEBARGHYA SAMADDER
+            </span>
           </div>
 
-          {/* Bottom Row */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingTop: 24,
-              borderTop: "1px solid #1a1a1a",
-              flexWrap: "wrap",
-              gap: 16,
-            }}
-          >
-            <div style={{ color: "#555", fontSize: 13 }}>
-              © {new Date().getFullYear()} PrepHire. All rights reserved.
-            </div>
-            <div style={{ display: "flex", gap: 20 }}>
-              <span
-                style={{
-                  color: "#555",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  transition: "color 0.2s",
-                }}
-                onMouseOver={(e) => (e.target.style.color = "#fff")}
-                onMouseOut={(e) => (e.target.style.color = "#555")}
-              >
-                𝕏 (Twitter)
-              </span>
-              <span
-                style={{
-                  color: "#555",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  transition: "color 0.2s",
-                }}
-                onMouseOver={(e) => (e.target.style.color = "#fff")}
-                onMouseOut={(e) => (e.target.style.color = "#555")}
-              >
-                LinkedIn
-              </span>
-              <span
-                style={{
-                  color: "#555",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  transition: "color 0.2s",
-                }}
-                onMouseOver={(e) => (e.target.style.color = "#fff")}
-                onMouseOut={(e) => (e.target.style.color = "#555")}
-              >
-                GitHub
-              </span>
-            </div>
+          <div style={{ display: "flex", gap: 24 }}>
+            <a
+              href="https://twitter.com"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#666", textDecoration: "none", fontSize: 14, transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.target.style.color = "#fff")}
+              onMouseOut={(e) => (e.target.style.color = "#666")}
+            >
+              𝕏 (Twitter)
+            </a>
+            <a
+              href="https://www.linkedin.com/in/debarghya-samadder-6272a3238/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#666", textDecoration: "none", fontSize: 14, transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.target.style.color = "#fff")}
+              onMouseOut={(e) => (e.target.style.color = "#666")}
+            >
+              LinkedIn
+            </a>
+            <a
+              href="https://github.com/Deba18-bit"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#666", textDecoration: "none", fontSize: 14, transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.target.style.color = "#fff")}
+              onMouseOut={(e) => (e.target.style.color = "#666")}
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </footer>

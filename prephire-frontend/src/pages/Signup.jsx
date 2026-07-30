@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { signup } from "../services/api";
 
 export default function Signup() {
-  const navigate = useNavigate();
   const [form, setForm] = useState({ full_name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,7 +17,21 @@ export default function Signup() {
       // Auto-login removed. We simply trigger the success UI now.
       setSuccess(true);
     } catch (err) {
-      setError(err.response?.data?.detail || "Something went wrong");
+      if (err.response && err.response.data && err.response.data.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          // Extract the exact message, e.g., "value is not a valid email address"
+          setError(detail[0].msg); 
+        }
+        else if (typeof detail === 'string') {
+          setError(detail);
+        }else {
+          setError("An unexpected error occurred.");
+        }
+        } else {
+        // Fallback for network errors (server down, etc.)
+        setError("Unable to connect to the server. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
