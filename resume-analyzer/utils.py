@@ -22,17 +22,24 @@ def send_verification_email(receiver_email: str, token: str):
     # This is the link the user will click. It goes to your React app.
     magic_link = f"https://prep-hire-pink.vercel.app/verify-email?token={token}"
     
-    msg = MIMEText(f"Welcome to PrepHire! Click here to verify your account: {magic_link}")
-    msg['Subject'] = 'Verify your PrepHire Account'
-    msg['From'] = SMTP_EMAIL
-    msg['To'] = receiver_email
+    # Print the link loudly to the Render console
+    print("\n" + "="*60)
+    print(f"🚨 NEW SIGNUP: {receiver_email} 🚨")
+    print(f"🔗 CLICK TO VERIFY: {magic_link}")
+    print("="*60 + "\n")
 
-    try:
-        # Connect to Gmail and send!
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        print("✅ Email sent successfully!")
-    except Exception as e:
-        print(f"❌ Error sending email: {e}")
+    # --- COMMENTED OUT TO PREVENT RENDER FIREWALL CRASH ---
+    # msg = MIMEText(f"Welcome to PrepHire! Click here to verify your account: {magic_link}")
+    # msg['Subject'] = 'Verify your PrepHire Account'
+    # msg['From'] = SMTP_EMAIL
+    # msg['To'] = receiver_email
+    #
+    # try:
+    #     # Connect to Gmail and send!
+    #     server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    #     server.login(SMTP_EMAIL, SMTP_PASSWORD)
+    #     server.send_message(msg)
+    #     server.quit()
+    #     print("✅ Email sent successfully!")
+    # except Exception as e:
+    #     print(f"❌ Error sending email: {e}")
