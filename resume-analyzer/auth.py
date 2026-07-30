@@ -1,17 +1,66 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+import os
+import jwt
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from passlib.context import CryptContext
+from fastapi import HTTPException, Security, status, Depends, APIRouter
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
 from google.auth.transport import requests
-import os
 
-# Import your existing database setup & helper models
 from database import get_db
 from models import User
-from auth import create_access_token # Ensure this points to your JWT helper function
 
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = "HS256"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 router = APIRouter()
 
+def hash_password(password: str):
+    return pwd_context.hash(password)
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.PyJWTError:
+        return None
+
+def get_current_user(token: str = Security(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+    
+    email = payload.get("sub") or payload.get("email")
+    user_id = payload.get("user_id")
+    
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+    elif email:
+        user = db.query(User).filter(User.email == email).first()
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+        
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+# --- Google OAuth Route ---
 class GoogleAuthRequest(BaseModel):
     credential: str
 
@@ -20,7 +69,6 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     
     try:
-        # 1. Verify token with Google's servers
         id_info = id_token.verify_oauth2_token(data.credential, requests.Request(), client_id)
         
         email = id_info.get("email")
@@ -29,11 +77,9 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
         if not email:
             raise HTTPException(status_code=400, detail="Invalid token: missing email")
             
-        # 2. Check if user already exists in database
         user = db.query(User).filter(User.email == email).first()
         
         if not user:
-            # 3. Create a brand new verified user automatically!
             user = User(
                 full_name=name,
                 email=email,
@@ -44,11 +90,9 @@ def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(user)
         elif not user.is_verified:
-            # Auto-verify them if they were unverified
             user.is_verified = True
             db.commit()
 
-        # 4. Generate your app's JWT access token
         access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
         
         return {
