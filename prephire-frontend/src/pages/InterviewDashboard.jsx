@@ -9,7 +9,7 @@ export default function InterviewDashboard() {
 
   useEffect(() => {
     // Use your central api instance instead of raw fetch
-    api.get("/interviews/history")
+    api.get("/api/interviews/history")
       .then((res) => {
         const rawInterviews = res.data.interviews || [];
         

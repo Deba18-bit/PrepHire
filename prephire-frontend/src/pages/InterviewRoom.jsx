@@ -150,7 +150,7 @@ export default function InterviewRoom() {
     
     try {
       // Use your central api instance instead of raw fetch
-      const res = await api.post("/interview/reply", {
+      const res = await api.post("/api/interview/reply", {
         session_id: sessionId,
         answer_text: userMessage
       });

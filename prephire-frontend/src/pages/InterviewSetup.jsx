@@ -65,7 +65,7 @@ export default function InterviewSetup() {
       }
 
       // 2. Send request using your central Axios instance (handles timeout & auth token automatically)
-      const res = await api.post("/interview/start", formData, {
+      const res = await api.post("/api/interview/start", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },

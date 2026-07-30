@@ -10,7 +10,7 @@ export default function InterviewReport() {
 
   useEffect(() => {
     // Use your central api instance instead of raw fetch
-    api.get(`/interviews/report/${id}`)
+    api.get(`/api/interviews/report/${id}`)
       .then((res) => {
         setReport(res.data);
         setLoading(false);
