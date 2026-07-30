@@ -47,7 +47,6 @@ numpy==2.5.1
 orjson==3.11.9
 ormsgpack==1.12.2
 packaging==26.2
-passlib==1.7.4
 propcache==0.5.2
 psycopg2-binary==2.9.12
 pyasn1==0.6.3

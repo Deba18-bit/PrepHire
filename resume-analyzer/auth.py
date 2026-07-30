@@ -2,7 +2,7 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from passlib.context import CryptContext
+import bcrypt  # Direct import
 from fastapi import HTTPException, Security, status, Depends, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -18,15 +18,19 @@ load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 router = APIRouter()
 
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    # Hash using bcrypt directly (utf-8 encoded, truncated to 72 bytes safely)
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    pwd_bytes = plain_password.encode('utf-8')[:72]
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(pwd_bytes, hashed_bytes)
 
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
     to_encode = data.copy()
