@@ -8,6 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from pydantic import BaseModel
 
 from database import get_db
 from models import User
