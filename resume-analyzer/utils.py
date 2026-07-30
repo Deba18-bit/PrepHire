@@ -20,7 +20,7 @@ def create_verification_token(email: str):
 
 def send_verification_email(receiver_email: str, token: str):
     # This is the link the user will click. It goes to your React app.
-    magic_link = f"http://localhost:3000/verify-email?token={token}"
+    magic_link = f"https://prep-hire-pink.vercel.app/verify-email?token={token}"
     
     msg = MIMEText(f"Welcome to PrepHire! Click here to verify your account: {magic_link}")
     msg['Subject'] = 'Verify your PrepHire Account'
