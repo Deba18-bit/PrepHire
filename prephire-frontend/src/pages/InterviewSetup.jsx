@@ -73,11 +73,12 @@ export default function InterviewSetup() {
 
       const data = res.data;
 
-      // 3. Navigate to the room, passing the backend's response data
+      // 3. Navigate to the room, passing the backend's response data (Including Edge-TTS Audio Stream!)
       navigate("/interview-room", { 
         state: { 
           sessionId: data.session_id,
           initialMessage: data.ai_message,
+          initialAudio: data.audio_base64, // <-- Added this to pass the audio stream!
           role: targetRole 
         } 
       });
