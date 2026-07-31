@@ -63,6 +63,20 @@ export default function Analysis() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        .btn-primary {
+          background: linear-gradient(135deg, #4F7EFF, #8B5CF6);
+          color: #fff; border: none;
+          padding: 12px 24px; border-radius: 8px;
+          font-size: 14px; font-weight: 600;
+          cursor: pointer; font-family: inherit;
+          transition: opacity 0.2s;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .btn-primary:hover { opacity: 0.85; }
       `}</style>
 
       {/* Navbar */}
@@ -126,7 +140,7 @@ export default function Analysis() {
                 overflowY: "auto",
                 boxShadow: "-10px 0 30px rgba(0,0,0,0.8)"
               }}
-              onClick={(e) => e.stopPropagation()} // Prevent clicking drawer from closing it
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Drawer Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -436,15 +450,13 @@ export default function Analysis() {
           >
             Analyze Another Resume
           </button>
+          
+          {/* Active Practice Interview Button */}
           <button
-            style={{
-              background: "transparent",
-              border: "1px solid #1a1a1a",
-              color: "#666", padding: "12px 24px", borderRadius: 8,
-              fontSize: 14, cursor: "pointer", fontFamily: "inherit",
-            }}
+            className="btn-primary"
+            onClick={() => navigate("/interview-setup")}
           >
-            Practice Interview(Coming Soon) →
+            Practice Interview →
           </button>
         </div>
       </div>
