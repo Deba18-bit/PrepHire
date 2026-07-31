@@ -21,13 +21,29 @@ export const signup = (data) => api.post('/signup', data);
 export const login = (data) => api.post('/login', data);
 export const getMe = () => api.get('/me');
 
-// Resume - FIXED: Added multipart headers and URL encoding for spaces
-export const uploadResume = (formData, targetRole) => 
-  api.post(`/upload-resume?target_role=${encodeURIComponent(targetRole)}`, formData, {
+// ─── BULLETPROOF FETCH UPLOAD ───
+export const uploadResume = async (formData, targetRole) => {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`${API_URL}/upload-resume?target_role=${encodeURIComponent(targetRole)}`, {
+    method: "POST",
     headers: {
-      "Content-Type": "multipart/form-data",
+      Authorization: `Bearer ${token}`,
+      // 🚨 Notice there is NO Content-Type header here! 
+      // The browser will generate the perfect multipart boundary automatically.
     },
+    body: formData,
   });
+
+  if (!response.ok) {
+    // Replicate Axios error structure so Dashboard.jsx doesn't break
+    const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
+    throw { response: { data: errorData } }; 
+  }
+
+  const data = await response.json();
+  return { data };
+};
 
 export const changePlan = (userId, plan) => 
   api.put(`/admin/change-plan/${userId}?plan=${plan}`);
