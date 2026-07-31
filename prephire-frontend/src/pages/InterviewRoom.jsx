@@ -1,145 +1,295 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import "regenerator-runtime/runtime"; 
 import api from "../services/api";
 
-export default function InterviewSetup() {
+export default function InterviewRoom() {
+  const location = useLocation();
   const navigate = useNavigate();
+  
+  // Accept initial audio data if passed from setup, plus standard fields
+  const { sessionId, initialMessage, initialAudio, role } = location.state || {};
 
-  const [targetRole, setTargetRole] = useState("Full Stack Developer");
-  const [experienceLevel, setExperienceLevel] = useState("Mid-Level");
-  const [interviewFocus, setInterviewFocus] = useState("System Design & Architecture");
-  const [resumeFile, setResumeFile] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const [answerText, setAnswerText] = useState("");
+  
+  // Store messages along with their respective base64 audio data if available
+  const [chatLog, setChatLog] = useState([
+    { sender: "ai", text: initialMessage || "Hello! I am your AI Interviewer. Let's begin.", audio: initialAudio || null }
+  ]);
+  
+  const chatEndRef = useRef(null);
+  const audioRef = useRef(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage("");
-
-    const formData = new FormData();
-    formData.append("target_role", targetRole);
-    formData.append("experience_level", experienceLevel);
-    formData.append("interview_focus", interviewFocus);
-    if (resumeFile) {
-      formData.append("resume_file", resumeFile);
-    }
-
+  // Play audio helper
+  const playAudioStream = (base64Data) => {
+    if (!base64Data) return;
     try {
-      // Calls your FastAPI backend endpoint (/api/interview/start)
-      const res = await api.post("/api/interview/start", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      const audioSource = `data:audio/mp3;base64,${base64Data}`;
+      const audio = new Audio(audioSource);
+      audioRef.current = audio;
+      audio.play().catch(err => {
+        console.warn("Audio autoplay blocked or failed:", err);
+      });
+    } catch (err) {
+      console.warn("Error playing audio stream:", err);
+    }
+  };
+
+  // Play initial audio on load if available
+  useEffect(() => {
+    if (initialAudio) {
+      playAudioStream(initialAudio);
+    }
+  }, [initialAudio]);
+
+  useEffect(() => {
+    if (!sessionId) navigate("/interview-setup");
+  }, [sessionId, navigate]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatLog]);
+
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition 
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (listening) {
+      setAnswerText(transcript);
+    }
+  }, [transcript, listening]);
+
+  if (!browserSupportsSpeechRecognition) {
+    return (
+      <div style={{ background: "#080808", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ textAlign: "center", background: "#0f0f0f", border: "1px solid #1a1a1a", padding: "40px", borderRadius: "16px", maxWidth: "500px" }}>
+          <h2 style={{ fontSize: 24, marginBottom: 12, fontWeight: 700 }}>Microphone Not Supported</h2>
+          <p style={{ color: "#888", marginBottom: 24, lineHeight: 1.6 }}>Your current browser does not support the web speech API required for live interviews. Please switch to <b>Google Chrome</b>.</p>
+          <button 
+            onClick={() => navigate("/dashboard")}
+            style={{ background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)", color: "#fff", border: "none", padding: "12px 24px", borderRadius: "8px", fontWeight: 600, cursor: "pointer" }}
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const handleStartSpeaking = () => {
+    if (audioRef.current) audioRef.current.pause();
+    resetTranscript();
+    setAnswerText("");
+    SpeechRecognition.startListening({ continuous: true });
+  };
+
+  const handleStopSpeaking = () => {
+    SpeechRecognition.stopListening();
+  };
+
+  const handleSubmitAnswer = async () => {
+    if (!answerText.trim()) return;
+    
+    SpeechRecognition.stopListening();
+    if (audioRef.current) audioRef.current.pause();
+
+    const userMessage = answerText;
+    setChatLog((prev) => [...prev, { sender: "user", text: userMessage, audio: null }]);
+    setAnswerText("");
+    resetTranscript();
+    setIsAIThinking(true);
+    
+    try {
+      const res = await api.post("/api/interview/reply", {
+        session_id: sessionId,
+        answer_text: userMessage
       });
 
       const data = res.data;
 
-      // ─── NAVIGATE TO INTERVIEW ROOM WITH AUDIO PAYLOAD ───
-      navigate("/interview-room", {
-        state: {
-          sessionId: data.session_id,
-          initialMessage: data.ai_message,
-          initialAudio: data.audio_base64, // Passes Edge-TTS base64 audio stream
-          role: targetRole,
-        },
-      });
+      if (data.ai_message.includes("[INTERVIEW_COMPLETE]")) {
+        const cleanMessage = data.ai_message.replace("[INTERVIEW_COMPLETE]", "").trim();
+        
+        setChatLog((prev) => [...prev, { sender: "ai", text: cleanMessage, audio: data.audio_base64 }]);
+        playAudioStream(data.audio_base64);
+        
+        setTimeout(() => {
+          navigate(`/interview-report/${sessionId}`);
+        }, 8500); 
+        
+        return; 
+      }
 
-    } catch (err) {
-      console.error("Setup Error:", err);
-      setErrorMessage(
-        err.response?.data?.detail || "Failed to start interview session. Please try again."
-      );
+      setChatLog((prev) => [...prev, { sender: "ai", text: data.ai_message, audio: data.audio_base64 }]);
+      playAudioStream(data.audio_base64);
+
+    } catch (error) {
+      console.error("Interview Error:", error);
+      const errorMsg = "I'm having trouble connecting right now. Could you repeat that?";
+      setChatLog((prev) => [...prev, { sender: "ai", text: errorMsg, audio: null }]);
     } finally {
-      setIsLoading(false);
+      setIsAIThinking(false);
+    }
+  };
+
+  const handleEndInterview = () => {
+    if (audioRef.current) audioRef.current.pause();
+    if (window.confirm("Are you sure you want to end the interview early?")) {
+      navigate("/dashboard");
     }
   };
 
   return (
-    <div style={{ background: "#080808", minHeight: "100vh", color: "#fff", fontFamily: "'DM Sans', sans-serif", padding: "60px 24px", display: "flex", justifyContent: "center", alignItems: "center" }}>
-      <div style={{ width: "100%", maxWidth: 600, background: "#0c0c0c", border: "1px solid #1a1a1a", borderRadius: 20, padding: "40px" }}>
+    <div style={{ background: "#080808", minHeight: "100vh", color: "#fff", fontFamily: "'DM Sans', sans-serif", padding: "40px 24px" }}>
+      <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
         
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Mock Interview Setup</h1>
-        <p style={{ color: "#888", fontSize: 14, marginBottom: 32 }}>Configure your parameters before entering the interview room.</p>
-
-        {errorMessage && (
-          <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#ef4444", padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 24 }}>
-            {errorMessage}
+        {/* Header with Replay Audio & End Interview Controls */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1a1a1a", paddingBottom: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 700 }}>Live Interview</h1>
+            <p style={{ color: "#666", fontSize: 14, marginTop: 4 }}>Role: {role || "Candidate"}</p>
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           
-          {/* Target Role */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Target Role</label>
-            <input 
-              type="text" 
-              value={targetRole} 
-              onChange={(e) => setTargetRole(e.target.value)}
-              required
-              placeholder="e.g. Senior Frontend Engineer"
-              style={{ background: "#141414", border: "1px solid #262626", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 15, outline: "none" }}
-            />
-          </div>
-
-          {/* Experience Level */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Experience Level</label>
-            <select 
-              value={experienceLevel} 
-              onChange={(e) => setExperienceLevel(e.target.value)}
-              style={{ background: "#141414", border: "1px solid #262626", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 15, outline: "none" }}
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <button 
+              onClick={() => {
+                const lastAiMessage = [...chatLog].reverse().find(m => m.sender === "ai" && m.audio);
+                if (lastAiMessage) playAudioStream(lastAiMessage.audio);
+              }}
+              style={{ background: "rgba(139, 92, 246, 0.15)", border: "1px solid #8B5CF6", color: "#C084FC", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+              title="Click to replay latest AI audio"
             >
-              <option value="Junior">Junior (0-2 years)</option>
-              <option value="Mid-Level">Mid-Level (3-5 years)</option>
-              <option value="Senior">Senior (5+ years)</option>
-              <option value="Staff/Principal">Staff / Principal</option>
-            </select>
-          </div>
+              🔊 Replay Audio
+            </button>
 
-          {/* Interview Focus */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Interview Focus</label>
-            <select 
-              value={interviewFocus} 
-              onChange={(e) => setInterviewFocus(e.target.value)}
-              style={{ background: "#141414", border: "1px solid #262626", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 15, outline: "none" }}
+            <button 
+              onClick={handleEndInterview}
+              style={{ background: "#1a1a1a", border: "1px solid #333", color: "#ff6b6b", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
             >
-              <option value="System Design & Architecture">System Design & Architecture</option>
-              <option value="Data Structures & Algorithms">Data Structures & Algorithms</option>
-              <option value="Behavioral & Leadership">Behavioral & Leadership</option>
-              <option value="Full Stack Technical Deep Dive">Full Stack Technical Deep Dive</option>
-            </select>
+              End Interview
+            </button>
           </div>
+        </div>
 
-          {/* Resume Upload (Optional) */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Resume (Optional)</label>
-            <input 
-              type="file" 
-              accept=".pdf,.doc,.docx"
-              onChange={(e) => setResumeFile(e.target.files[0])}
-              style={{ background: "#141414", border: "1px solid #262626", borderRadius: 10, padding: "12px", color: "#888", fontSize: 14, outline: "none" }}
-            />
-          </div>
+        {/* Chat History Window */}
+        <div style={{ 
+          background: "#0c0c0c", border: "1px solid #1a1a1a", borderRadius: 16, padding: "24px",
+          height: "50vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 
+        }}>
+          {chatLog.map((msg, index) => (
+            <div key={index} style={{
+              display: "flex", 
+              flexDirection: msg.sender === "user" ? "row-reverse" : "row",
+              gap: 12,
+              alignItems: "flex-start"
+            }}>
+              <div style={{ 
+                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                background: msg.sender === "user" ? "#222" : "linear-gradient(135deg, #4F7EFF, #8B5CF6)", 
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 
+              }}>
+                {msg.sender === "user" ? "👤" : "🤖"}
+              </div>
+              <div style={{
+                background: msg.sender === "user" ? "#1a1a1a" : "rgba(79,126,255,0.08)",
+                border: msg.sender === "user" ? "1px solid #333" : "1px solid rgba(79,126,255,0.2)",
+                padding: "14px 18px",
+                borderRadius: 16,
+                borderTopLeftRadius: msg.sender === "ai" ? 4 : 16,
+                borderTopRightRadius: msg.sender === "user" ? 4 : 16,
+                maxWidth: "80%",
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: "#eee"
+              }}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {isAIThinking && (
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🤖</div>
+              <div style={{ padding: "14px 18px", color: "#888", fontSize: 14, fontStyle: "italic" }}>
+                Interviewer is thinking...
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
 
-          {/* Submit Button */}
-          <button 
-            type="submit"
-            disabled={isLoading}
+        {/* User Answer Input Area */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ fontSize: 13, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Your Response
+          </label>
+          <textarea
+            value={answerText}
+            onChange={(e) => setAnswerText(e.target.value)}
+            disabled={isAIThinking}
+            placeholder={isAIThinking ? "Wait for the interviewer to finish..." : "Start speaking, or type your answer here..."}
             style={{
-              marginTop: 12,
-              background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)",
-              border: "none", color: "#fff", padding: "16px", borderRadius: 10,
-              fontSize: 16, fontWeight: 700, cursor: isLoading ? "not-allowed" : "pointer",
-              opacity: isLoading ? 0.7 : 1, boxShadow: "0 4px 20px rgba(79,126,255,0.3)"
+              width: "100%", height: 120, background: "#0c0c0c", border: "1px solid #222",
+              borderRadius: 12, padding: 16, color: "#fff", fontSize: 15, lineHeight: 1.6,
+              resize: "none", outline: "none", fontFamily: "inherit",
+              opacity: isAIThinking ? 0.5 : 1
             }}
-          >
-            {isLoading ? "Preparing Interview Room & Audio..." : "Start Live Interview →"}
-          </button>
+            onFocus={(e) => e.target.style.borderColor = "#4F7EFF"}
+            onBlur={(e) => e.target.style.borderColor = "#222"}
+          />
 
-        </form>
-
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 12 }}>
+              {!listening ? (
+                <button
+                  onClick={handleStartSpeaking}
+                  disabled={isAIThinking}
+                  style={{ 
+                    background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", 
+                    color: "#ef4444", padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, 
+                    cursor: isAIThinking ? "not-allowed" : "pointer", opacity: isAIThinking ? 0.5 : 1 
+                  }}
+                >
+                  🎤 Start Speaking
+                </button>
+              ) : (
+                <button
+                  onClick={handleStopSpeaking}
+                  style={{ 
+                    background: "#ef4444", border: "none", color: "#fff", padding: "10px 20px", borderRadius: 8, 
+                    fontSize: 14, fontWeight: 600, cursor: "pointer", animation: "pulse 1.5s infinite" 
+                  }}
+                >
+                  ⏹ Stop Recording
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleSubmitAnswer}
+              disabled={isAIThinking || !answerText.trim()}
+              style={{
+                background: "linear-gradient(135deg, #4F7EFF, #8B5CF6)", border: "none", color: "#fff",
+                padding: "10px 28px", borderRadius: 8, fontSize: 14, fontWeight: 600, 
+                cursor: (isAIThinking || !answerText.trim()) ? "not-allowed" : "pointer",
+                opacity: (isAIThinking || !answerText.trim()) ? 0.5 : 1,
+                boxShadow: (isAIThinking || !answerText.trim()) ? "none" : "0 4px 15px rgba(79,126,255,0.3)"
+              }}
+            >
+              Submit Answer →
+            </button>
+          </div>
+        </div>
       </div>
+      <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }`}</style>
     </div>
   );
 }
