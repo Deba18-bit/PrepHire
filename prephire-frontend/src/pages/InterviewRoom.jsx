@@ -19,31 +19,37 @@ export default function InterviewRoom() {
   
   const chatEndRef = useRef(null);
 
-  // ── 1. Force Browser to Load Premium Voices ──
+  // ── 1. Force Browser to Load Voices Safely ──
   useEffect(() => {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = () => {
+      const loadVoices = () => {
         window.speechSynthesis.getVoices();
       };
+      loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
     }
   }, []);
 
-  // ── 2. TEXT-TO-SPEECH (Reliable Natural Voice) ──
+  // ── 2. TEXT-TO-SPEECH (Cross-Browser Safe Fallback) ──
   const speakText = (text) => {
-    if ('speechSynthesis' in window) {
+    if (!('speechSynthesis' in window)) return;
+    
+    try {
       window.speechSynthesis.cancel(); 
       const utterance = new SpeechSynthesisUtterance(text);
       
-      const voices = window.speechSynthesis.getVoices();
+      const voices = window.speechSynthesis.getVoices() || [];
       
       const premiumVoice = voices.find(v => 
+        v.name.includes("Google US English") ||
+        v.name.includes("Microsoft Zira") ||
+        v.name.includes("Microsoft David") ||
         v.name.includes("Samantha") || 
         v.name.includes("Daniel") ||   
         v.name.includes("Alex") ||     
         v.name.includes("Karen") ||
-        v.name.includes("Google US English") ||
-        v.name.includes("Microsoft Zira") ||
-        v.name.includes("Microsoft David") ||
         v.lang === "en-US" || 
         v.lang === "en-GB"
       );
@@ -53,35 +59,35 @@ export default function InterviewRoom() {
       }
 
       utterance.rate = 1.0;  
-      utterance.pitch = 0.95; 
+      utterance.pitch = 1.0; 
       
+      // Catch browser blocking (common in Brave/Chrome autoplay restrictions)
+      utterance.onerror = (e) => {
+        console.warn("Speech synthesis error or blocked by browser restriction:", e);
+      };
+
       window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn("Speech synthesis unavailable:", err);
     }
   };
 
-  // Attempt to speak initial message, fallback to user gesture if browser blocks autoplay
+  // Safe initial speech execution
   useEffect(() => {
     if (!initialMessage) return;
 
-    let timeoutId;
-    const attemptSpeech = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        speakText(initialMessage);
-      } else {
-        timeoutId = setTimeout(attemptSpeech, 100);
-      }
-    };
-
-    attemptSpeech();
+    const timer = setTimeout(() => {
+      speakText(initialMessage);
+    }, 300);
 
     return () => {
+      clearTimeout(timer);
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.clear?.();
-        window.speechSynthesis.cancel();
-      }
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+        try {
+          window.speechSynthesis.cancel();
+        } catch (e) {
+          // Ignore cancellation errors
+        }
       }
     };
   }, [initialMessage]);
@@ -126,7 +132,9 @@ export default function InterviewRoom() {
   }
 
   const handleStartSpeaking = () => {
-    window.speechSynthesis.cancel(); 
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
     resetTranscript();
     setAnswerText("");
     SpeechRecognition.startListening({ continuous: true });
@@ -140,7 +148,9 @@ export default function InterviewRoom() {
     if (!answerText.trim()) return;
     
     SpeechRecognition.stopListening();
-    window.speechSynthesis.cancel();
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
 
     const userMessage = answerText;
     setChatLog((prev) => [...prev, { sender: "user", text: userMessage }]);
@@ -186,7 +196,9 @@ export default function InterviewRoom() {
   };
 
   const handleEndInterview = () => {
-    window.speechSynthesis.cancel(); 
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
     if (window.confirm("Are you sure you want to end the interview early?")) {
       navigate("/dashboard");
     }
