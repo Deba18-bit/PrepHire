@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 import json
 from pydantic import BaseModel
 from typing import List
+import edge_tts
+import tempfile
+import base64
 
 # Force load environment variables
 load_dotenv()
@@ -36,6 +39,27 @@ class InterviewEvaluation(BaseModel):
     grade: str
     top_priority_fix: str
     pillars: List[PillarResult]
+
+
+# ─── Helper: Generate Edge-TTS Audio as Base64 ───
+async def generate_speech_base64(text: str) -> str:
+    try:
+        voice = "en-US-AriaNeural"  # High-quality professional neural voice
+        communicate = edge_tts.Communicate(text, voice)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
+            temp_path = temp_file.name
+            
+        await communicate.save(temp_path)
+        
+        with open(temp_path, "rb") as audio_file:
+            encoded_audio = base64.b64encode(audio_file.read()).decode("utf-8")
+            
+        os.remove(temp_path)
+        return encoded_audio
+    except Exception as e:
+        print("TTS Generation Error:", str(e))
+        return ""
 
 
 # ─── 1. Start the Interview Session ───
@@ -113,9 +137,13 @@ async def start_interview(
         db.add(new_session)
         db.commit()
 
+        # Generate audio stream payload
+        audio_data = await generate_speech_base64(response.text)
+
         return {
             "session_id": session_id,
             "ai_message": response.text,
+            "audio_base64": audio_data,
             "status": "success"
         }
 
@@ -155,8 +183,10 @@ async def reply_interview(
             session.chat_history = updated_history
             db.commit()
 
+            audio_data = await generate_speech_base64(completion_msg)
             return {
                 "ai_message": completion_msg,
+                "audio_base64": audio_data,
                 "status": "success"
             }
 
@@ -188,8 +218,11 @@ async def reply_interview(
         session.chat_history = updated_history
         db.commit()
 
+        audio_data = await generate_speech_base64(response.text)
+
         return {
             "ai_message": response.text,
+            "audio_base64": audio_data,
             "status": "success"
         }
 

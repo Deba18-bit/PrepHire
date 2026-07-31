@@ -8,7 +8,7 @@ export default function InterviewRoom() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const { sessionId, initialMessage, role } = location.state || {};
+  const { sessionId, initialMessage, initialAudio, role } = location.state || {};
 
   // ── State Management ──
   const [isAIThinking, setIsAIThinking] = useState(false);
@@ -18,79 +18,33 @@ export default function InterviewRoom() {
   ]);
   
   const chatEndRef = useRef(null);
+  const audioRef = useRef(null);
 
-  // ── 1. Force Browser to Load Voices Safely ──
-  useEffect(() => {
-    if ('speechSynthesis' in window) {
-      const loadVoices = () => {
-        window.speechSynthesis.getVoices();
-      };
-      loadVoices();
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = loadVoices;
-      }
-    }
-  }, []);
-
-  // ── 2. TEXT-TO-SPEECH (Cross-Browser Safe Fallback) ──
-  const speakText = (text) => {
-    if (!('speechSynthesis' in window)) return;
-    
+  // ── 1. AUDIO STREAM PLAYER (Edge-TTS uniform playback) ──
+  const playAudioStream = (base64Data) => {
+    if (!base64Data) return;
     try {
-      window.speechSynthesis.cancel(); 
-      const utterance = new SpeechSynthesisUtterance(text);
-      
-      const voices = window.speechSynthesis.getVoices() || [];
-      
-      const premiumVoice = voices.find(v => 
-        v.name.includes("Google US English") ||
-        v.name.includes("Microsoft Zira") ||
-        v.name.includes("Microsoft David") ||
-        v.name.includes("Samantha") || 
-        v.name.includes("Daniel") ||   
-        v.name.includes("Alex") ||     
-        v.name.includes("Karen") ||
-        v.lang === "en-US" || 
-        v.lang === "en-GB"
-      );
-
-      if (premiumVoice) {
-        utterance.voice = premiumVoice;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
       }
-
-      utterance.rate = 1.0;  
-      utterance.pitch = 1.0; 
-      
-      // Catch browser blocking (common in Brave/Chrome autoplay restrictions)
-      utterance.onerror = (e) => {
-        console.warn("Speech synthesis error or blocked by browser restriction:", e);
-      };
-
-      window.speechSynthesis.speak(utterance);
+      const audioSource = `data:audio/mp3;base64,${base64Data}`;
+      const audio = new Audio(audioSource);
+      audioRef.current = audio;
+      audio.play().catch(err => {
+        console.warn("Audio autoplay blocked or failed:", err);
+      });
     } catch (err) {
-      console.warn("Speech synthesis unavailable:", err);
+      console.warn("Error playing audio stream:", err);
     }
   };
 
-  // Safe initial speech execution
+  // Safe initial audio playback on mount
   useEffect(() => {
-    if (!initialMessage) return;
-
-    const timer = setTimeout(() => {
-      speakText(initialMessage);
-    }, 300);
-
-    return () => {
-      clearTimeout(timer);
-      if ('speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (e) {
-          // Ignore cancellation errors
-        }
-      }
-    };
-  }, [initialMessage]);
+    if (initialAudio) {
+      playAudioStream(initialAudio);
+    }
+  }, [initialAudio]);
 
   useEffect(() => {
     if (!sessionId) navigate("/interview-setup");
@@ -132,9 +86,7 @@ export default function InterviewRoom() {
   }
 
   const handleStartSpeaking = () => {
-    if ('speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch(e) {}
-    }
+    if (audioRef.current) audioRef.current.pause();
     resetTranscript();
     setAnswerText("");
     SpeechRecognition.startListening({ continuous: true });
@@ -148,9 +100,7 @@ export default function InterviewRoom() {
     if (!answerText.trim()) return;
     
     SpeechRecognition.stopListening();
-    if ('speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch(e) {}
-    }
+    if (audioRef.current) audioRef.current.pause();
 
     const userMessage = answerText;
     setChatLog((prev) => [...prev, { sender: "user", text: userMessage }]);
@@ -172,7 +122,7 @@ export default function InterviewRoom() {
         const cleanMessage = data.ai_message.replace("[INTERVIEW_COMPLETE]", "").trim();
         
         setChatLog((prev) => [...prev, { sender: "ai", text: cleanMessage }]);
-        speakText(cleanMessage);
+        playAudioStream(data.audio_base64);
         
         setTimeout(() => {
           navigate(`/interview-report/${sessionId}`);
@@ -183,22 +133,19 @@ export default function InterviewRoom() {
 
       // ─── STANDARD CHAT LOGIC ───
       setChatLog((prev) => [...prev, { sender: "ai", text: data.ai_message }]);
-      speakText(data.ai_message);
+      playAudioStream(data.audio_base64);
 
     } catch (error) {
       console.error("Interview Error:", error);
       const errorMsg = "I'm having trouble connecting right now. Could you repeat that?";
       setChatLog((prev) => [...prev, { sender: "ai", text: errorMsg }]);
-      speakText(errorMsg);
     } finally {
       setIsAIThinking(false);
     }
   };
 
   const handleEndInterview = () => {
-    if ('speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch(e) {}
-    }
+    if (audioRef.current) audioRef.current.pause();
     if (window.confirm("Are you sure you want to end the interview early?")) {
       navigate("/dashboard");
     }
@@ -208,7 +155,7 @@ export default function InterviewRoom() {
     <div style={{ background: "#080808", minHeight: "100vh", color: "#fff", fontFamily: "'DM Sans', sans-serif", padding: "40px 24px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
         
-        {/* Header with Voice Replay Control for Browser Security Compliance */}
+        {/* Header with End Interview Control */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1a1a1a", paddingBottom: 16 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700 }}>Live Interview</h1>
@@ -216,14 +163,6 @@ export default function InterviewRoom() {
           </div>
           
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button 
-              onClick={() => speakText(chatLog[chatLog.length - 1]?.text || initialMessage)}
-              style={{ background: "rgba(139, 92, 246, 0.15)", border: "1px solid #8B5CF6", color: "#C084FC", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-              title="Click to play/replay AI audio"
-            >
-              🔊 Replay AI Audio
-            </button>
-
             <button 
               onClick={handleEndInterview}
               style={{ background: "#1a1a1a", border: "1px solid #333", color: "#ff6b6b", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
