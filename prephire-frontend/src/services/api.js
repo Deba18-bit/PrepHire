@@ -21,9 +21,13 @@ export const signup = (data) => api.post('/signup', data);
 export const login = (data) => api.post('/login', data);
 export const getMe = () => api.get('/me');
 
-// Resume
+// Resume - FIXED: Added multipart headers and URL encoding for spaces
 export const uploadResume = (formData, targetRole) => 
-  api.post(`/upload-resume?target_role=${targetRole}`, formData);
+  api.post(`/upload-resume?target_role=${encodeURIComponent(targetRole)}`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
 export const changePlan = (userId, plan) => 
   api.put(`/admin/change-plan/${userId}?plan=${plan}`);
