@@ -10,8 +10,12 @@ load_dotenv()
 # Pull the hidden URL from the .env file
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Create the database engine
-engine = create_engine(DATABASE_URL)
+# Create the database engine with anti-drop pooling
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,  # Automatically tests and heals dropped SSL connections
+    pool_recycle=300     # Refreshes connections every 5 minutes to avoid timeouts
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
