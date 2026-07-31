@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, Depends, status, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Request
 from email_validator import validate_email, EmailNotValidError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -169,7 +169,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 # ─── Upload Resume — protected ───
 @app.post("/upload-resume")
 async def upload_resume(
-    file: UploadFile,
+    file: UploadFile = File(...),  # Explicitly tell FastAPI this is a multipart file upload
     target_role: str = "Software Engineer",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -184,15 +184,27 @@ async def upload_resume(
         raise HTTPException(400, "Only PDF files allowed")
 
     contents = await file.read()
-    extracted_text = extract_text_from_pdf(contents)
-    analysis = analyze_resume(extracted_text, target_role)
+    
+    # Safely extract text so the server doesn't crash on bad/mobile PDFs
+    try:
+        extracted_text = extract_text_from_pdf(contents)
+    except Exception as e:
+        print(f"PDF Extraction Error: {str(e)}")
+        raise HTTPException(status_code=400, detail="Could not read this PDF. Make sure it is not encrypted or corrupted.")
+
+    # Safely analyze text
+    try:
+        analysis = analyze_resume(extracted_text, target_role)
+    except Exception as e:
+        print(f"AI Analysis Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI analysis failed. Please try again.")
 
     db_analysis = ResumeAnalysis(
         user_id=current_user.id,
         filename=file.filename,
         target_role=target_role,
-        overall_score=analysis["overall_score"],
-        grade=analysis["grade"],
+        overall_score=analysis.get("overall_score", 0),
+        grade=analysis.get("grade", "N/A"),
         full_analysis=analysis
     )
     db.add(db_analysis)
