@@ -38,7 +38,11 @@ export const uploadResume = async (formData, targetRole) => {
   if (!response.ok) {
     // Replicate Axios error structure so Dashboard.jsx doesn't break
     const errorData = await response.json().catch(() => ({ detail: "Upload failed" }));
-    throw { response: { data: errorData } }; 
+    
+    // Create a proper Error object to satisfy ESLint's no-throw-literal rule
+    const error = new Error("Upload failed");
+    error.response = { data: errorData }; 
+    throw error; 
   }
 
   const data = await response.json();
